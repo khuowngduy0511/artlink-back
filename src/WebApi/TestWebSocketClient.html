@@ -1,0 +1,45 @@
+﻿<!DOCTYPE html>
+
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+</head>
+<body>
+    <h1>Test WebSocket client</h1>
+    <p id="debugg"></p>
+    <span id="chat-session"></span>
+</body>
+</html>
+<script>
+    const socket = new WebSocket('wss://localhost:7076/api/chatbox/00000000-0000-0000-0000-000000000001/messages/ws');
+    socket.onopen = () => {     
+        console.log("Connected to the Server via WebSocket");
+    }
+
+    socket.onmessage = (event) => {        
+        const messages = JSON.parse(event.data);
+        console.log(`Received data from server:`);
+        console.log(messages);
+        document.getElementById('debugg').textContent = `Received data from server: ${JSON.stringify(messages)}`;
+        // debugger
+        // Check if messages is an array
+        if (Array.isArray(messages)) {
+            // Iterate over each message object in the array
+            messages.forEach(message => {
+                const messageText = message.text;
+
+                // Create a new <div> element for each message
+                const messageElement = document.createElement('div');
+                messageElement.textContent = messageText;
+
+                // Append the message element to the chat session
+                const chatSession = document.getElementById('chat-session');
+                chatSession.appendChild(messageElement);
+            });
+        } else {
+            console.error('Received data is not an array:', messages);
+        }
+    };
+
+</script>
