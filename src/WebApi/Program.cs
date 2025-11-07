@@ -80,7 +80,7 @@ app.UseHttpsRedirection();
 
 app.UseStaticFiles(); // Use static files
 
-app.UseCorsPolicy(); // Use cors
+app.UseCors("AllowSpecificOrigin"); // Use CORS with specific policy
 
 // Add logging middleware for debugging
 app.Use(async (context, next) =>
