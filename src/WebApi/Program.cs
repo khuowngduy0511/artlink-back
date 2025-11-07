@@ -41,7 +41,19 @@ builder.Services.AddHttpClient();
 builder.Services.AddAutoMapper(typeof(MappingProfile));
 
 // Add Cors
-builder.Services.AddCorsPolicy();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowSpecificOrigin", builder =>
+    {
+        builder.WithOrigins(
+            "https://artlink-front.vercel.app",  // Domain Vercel của bạn
+            "http://localhost:3000"         // Cho dev
+        )
+        .AllowAnyMethod()
+        .AllowAnyHeader()
+        .AllowCredentials();
+    });
+});
 
 // Serilog configuration
 //Log.Logger = new LoggerConfiguration()
