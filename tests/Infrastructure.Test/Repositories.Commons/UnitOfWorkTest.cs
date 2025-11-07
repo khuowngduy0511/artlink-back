@@ -46,7 +46,8 @@ public class UnitOfWorkTest : SetupTest
                 _transactionHistoryRepositoryMock.Object,
                 _userTokenRepositoryMock.Object,
                 _walletHistoryRepositoryMock.Object,
-                _walletRepositoryMock.Object
+                _walletRepositoryMock.Object,
+                _withdrawalRequestRepositoryMock.Object
                 );
     }
 
