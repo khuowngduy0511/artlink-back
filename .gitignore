@@ -364,3 +364,7 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 src/WebApi/wwwroot/Asset/
+
+# Sensitive configuration files
+**/appsettings.Production.json
+**/appsettings.Staging.json
