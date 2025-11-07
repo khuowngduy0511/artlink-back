@@ -8,7 +8,21 @@ internal static class OpenApiDocumentation
     {
         services.AddSwaggerGen(opt =>
         {
-            opt.SwaggerDoc("v1", new OpenApiInfo { Title = "ArtLink System APIs", Version = "v1" });
+            opt.SwaggerDoc("v1", new OpenApiInfo 
+            { 
+                Title = "ArtLink System APIs", 
+                Version = "v1",
+                Description = "API documentation for ArtLink - Art Sharing Platform"
+            });
+            
+            // Ignore obsolete errors
+            opt.IgnoreObsoleteActions();
+            opt.IgnoreObsoleteProperties();
+            
+            // Custom operation IDs to avoid conflicts
+            opt.CustomOperationIds(e => 
+                $"{e.ActionDescriptor.RouteValues["controller"]}_{e.ActionDescriptor.RouteValues["action"]}");
+            
             opt.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
                 In = ParameterLocation.Header,

@@ -74,7 +74,13 @@ var app = builder.Build();
 // Configure the HTTP request pipeline.
 //app.UseSerilogRequestLogging();
 
-app.UseOpenApi(); // use swagger
+// Enable Swagger in all environments (remove for production security)
+app.UseSwagger();
+app.UseSwaggerUI(c =>
+{
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "ArtLink API V1");
+    c.RoutePrefix = "swagger"; // Set Swagger UI at /swagger
+});
 
 app.UseHttpsRedirection();
 
