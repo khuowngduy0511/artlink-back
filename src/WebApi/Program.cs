@@ -18,6 +18,12 @@ builder.Services.AddOpenApiDocumentation(); // Add Swagger config
 // Bind AppConfiguration from configuration
 var config = builder.Configuration.Get<AppConfiguration>();
 builder.Configuration.Bind(config);
+
+// 🔍 DEBUG: Log SecretKey length to verify env vars are loaded (NOT the actual key!)
+Console.WriteLine($"[CONFIG] JWT Issuer: {config?.JwtConfiguration?.Issuer}");
+Console.WriteLine($"[CONFIG] JWT SecretKey Length: {config?.JwtConfiguration?.SecretKey?.Length ?? 0} chars");
+Console.WriteLine($"[CONFIG] JWT SecretKey First 10 chars: {config?.JwtConfiguration?.SecretKey?.Substring(0, Math.Min(10, config.JwtConfiguration.SecretKey?.Length ?? 0))}...");
+
 builder.Services.AddSingleton(config!);
 
 // Add dbcontext middlerware
