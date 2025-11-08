@@ -9,6 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Services.Authentication;
 
@@ -17,14 +18,17 @@ public class TokenHandler : ITokenHandler
     private readonly AppConfiguration _appConfig;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IUserTokenService _userTokenService;
+    private readonly ILogger<TokenHandler> _logger;
 
     public TokenHandler(AppConfiguration appConfig,
         IUnitOfWork unitOfWork,
-        IUserTokenService userTokenService)
+        IUserTokenService userTokenService,
+        ILogger<TokenHandler> logger)
     {
         _appConfig = appConfig;
         _unitOfWork = unitOfWork;
         _userTokenService = userTokenService;
+        _logger = logger;
     }
 
     public TokenModel CreateAccessToken(Account user, DateTime issueTime)
@@ -180,6 +184,7 @@ public class TokenHandler : ITokenHandler
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "[JWT] Refresh token validation failed: {Message}", ex.Message);
             throw new Exception($"Error decoding token: {ex.Message}");
         }
     }

@@ -3,6 +3,7 @@ using Application.Services.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Microsoft.Extensions.Logging;
 
 namespace WebApi.Extensions;
 
@@ -35,7 +36,12 @@ internal static class JwtConfiguration
                         },
                         OnAuthenticationFailed = context =>
                         {
-                            // todo record log
+                            var loggerFactory = context.HttpContext.RequestServices
+                                .GetRequiredService<ILoggerFactory>();
+                            var logger = loggerFactory.CreateLogger("JwtAuthentication");
+                            logger.LogError(context.Exception,
+                                "[JWT] Authentication failed: {Message}",
+                                context.Exception.Message);
                             return Task.CompletedTask;
                         }
                     };

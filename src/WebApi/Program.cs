@@ -19,10 +19,14 @@ builder.Services.AddOpenApiDocumentation(); // Add Swagger config
 var config = builder.Configuration.Get<AppConfiguration>();
 builder.Configuration.Bind(config);
 
-// 🔍 DEBUG: Log SecretKey length to verify env vars are loaded (NOT the actual key!)
-Console.WriteLine($"[CONFIG] JWT Issuer: {config?.JwtConfiguration?.Issuer}");
-Console.WriteLine($"[CONFIG] JWT SecretKey Length: {config?.JwtConfiguration?.SecretKey?.Length ?? 0} chars");
-Console.WriteLine($"[CONFIG] JWT SecretKey First 10 chars: {config?.JwtConfiguration?.SecretKey?.Substring(0, Math.Min(10, config.JwtConfiguration.SecretKey?.Length ?? 0))}...");
+// 🔍 DEBUG: Log SecretKey metadata to verify env vars are loaded (without exposing the full value)
+var secretKey = config?.JwtConfiguration?.SecretKey ?? string.Empty;
+var issuer = config?.JwtConfiguration?.Issuer ?? "(null)";
+var keyPreview = secretKey.Length >= 10 ? secretKey[..10] : secretKey;
+
+Console.WriteLine($"[CONFIG] JWT Issuer: {issuer}");
+Console.WriteLine($"[CONFIG] JWT SecretKey Length: {secretKey.Length} chars");
+Console.WriteLine($"[CONFIG] JWT SecretKey Preview: {keyPreview}...");
 
 builder.Services.AddSingleton(config!);
 
