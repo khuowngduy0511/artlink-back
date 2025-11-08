@@ -36,14 +36,18 @@ public class TokenHandler : ITokenHandler
         var jwtConfig = _appConfig.JwtConfiguration;
         var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtConfig.SecretKey));
         var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
+        var issuedAtUtc = DateTime.SpecifyKind(issueTime, DateTimeKind.Utc);
+        var issuedAtSeconds = new DateTimeOffset(issuedAtUtc).ToUnixTimeSeconds().ToString();
+        var expiresAtUtc = issuedAtUtc.AddHours(jwtConfig.ATExpHours);
+        var expiresAtSeconds = new DateTimeOffset(expiresAtUtc).ToUnixTimeSeconds().ToString();
         var jti = NewId.Next().ToGuid();
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Jti, jti.ToString()),
             new Claim(JwtRegisteredClaimNames.Iss, jwtConfig.Issuer),
             new Claim(JwtRegisteredClaimNames.Aud, jwtConfig.Audience),
-            new Claim(JwtRegisteredClaimNames.Iat,issueTime.ToString("G")),
-            new Claim(JwtRegisteredClaimNames.Exp,issueTime.AddHours(jwtConfig.ATExpHours).ToString("G")),
+            new Claim(JwtRegisteredClaimNames.Iat, issuedAtSeconds, ClaimValueTypes.Integer64),
+            new Claim(JwtRegisteredClaimNames.Exp, expiresAtSeconds, ClaimValueTypes.Integer64),
             new Claim(ClaimTypes.SerialNumber, user.Id.ToString()),
             new Claim(ClaimTypes.NameIdentifier, user.Username),
             new Claim(ClaimTypes.Name, user.Fullname),
@@ -52,8 +56,8 @@ public class TokenHandler : ITokenHandler
         };
         var token = new JwtSecurityToken(
                 claims: claims,
-                notBefore: issueTime,
-                expires: issueTime.AddHours(jwtConfig.ATExpHours),
+                notBefore: issuedAtUtc,
+                expires: expiresAtUtc,
                 signingCredentials: credentials);
         var tokenStr = new JwtSecurityTokenHandler().WriteToken(token);
 
@@ -65,14 +69,18 @@ public class TokenHandler : ITokenHandler
         var jwtConfig = _appConfig.JwtConfiguration;
         var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtConfig.SecretKey));
         var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
+        var issuedAtUtc = DateTime.SpecifyKind(issueTime, DateTimeKind.Utc);
+        var issuedAtSeconds = new DateTimeOffset(issuedAtUtc).ToUnixTimeSeconds().ToString();
+        var expiresAtUtc = issuedAtUtc.AddHours(jwtConfig.RTExpHours);
+        var expiresAtSeconds = new DateTimeOffset(expiresAtUtc).ToUnixTimeSeconds().ToString();
         var jti = NewId.Next().ToGuid();
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Jti, jti.ToString()),
             new Claim(JwtRegisteredClaimNames.Iss, jwtConfig.Issuer),
             new Claim(JwtRegisteredClaimNames.Aud, jwtConfig.Audience),
-            new Claim(JwtRegisteredClaimNames.Iat,issueTime.ToString("G")),
-            new Claim(JwtRegisteredClaimNames.Exp,issueTime.AddHours(jwtConfig.RTExpHours).ToString("G")),
+            new Claim(JwtRegisteredClaimNames.Iat, issuedAtSeconds, ClaimValueTypes.Integer64),
+            new Claim(JwtRegisteredClaimNames.Exp, expiresAtSeconds, ClaimValueTypes.Integer64),
             new Claim(ClaimTypes.SerialNumber, user.Id.ToString()),
             new Claim(ClaimTypes.NameIdentifier, user.Username),
             new Claim(ClaimTypes.Name, user.Fullname),
@@ -81,8 +89,8 @@ public class TokenHandler : ITokenHandler
         };
         var token = new JwtSecurityToken(
                 claims: claims,
-                notBefore: issueTime,
-                expires: issueTime.AddHours(jwtConfig.RTExpHours),
+                notBefore: issuedAtUtc,
+                expires: expiresAtUtc,
                 signingCredentials: credentials);
         var tokenStr = new JwtSecurityTokenHandler().WriteToken(token);
 
