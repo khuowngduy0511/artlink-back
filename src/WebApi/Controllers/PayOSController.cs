@@ -198,15 +198,15 @@ public class PayOSController : ControllerBase
             if (success)
             {
                 // Redirect về frontend với thông báo thành công
-                return Redirect($"http://localhost:3000/payment/success?txId={txId}");
+                return Redirect($"https://artlink-front.vercel.app/payment/success?txId={txId}");
             }
 
-            return Redirect($"http://localhost:3000/payment/cancel?txId={txId}");
+            return Redirect($"https://artlink-front.vercel.app/payment/cancel?txId={txId}");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing payment return");
-            return Redirect($"http://localhost:3000/payment/cancel?error={ex.Message}");
+            return Redirect($"https://artlink-front.vercel.app/payment/cancel?error={ex.Message}");
         }
     }
 
@@ -217,7 +217,7 @@ public class PayOSController : ControllerBase
     public IActionResult PaymentCancel([FromQuery] string txId)
     {
         _logger.LogInformation("[PayOS Cancel] TxId: {TxId}", txId);
-        return Redirect($"http://localhost:3000/payment/cancel?txId={txId}");
+        return Redirect($"https://artlink-front.vercel.app/payment/cancel?txId={txId}");
     }
 
     /// <summary>
