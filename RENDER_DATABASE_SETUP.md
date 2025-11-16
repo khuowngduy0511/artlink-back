@@ -68,12 +68,36 @@ Host=dpg-xxxxx-a.singapore-postgres.render.com;Port=5432;Database=artlinkdb;User
 
 ## Bước 5: Apply Migrations
 
-Sau khi set environment variable, backend sẽ tự động apply migrations khi khởi động.
+**Migrations sẽ TỰ ĐỘNG được apply khi backend khởi động** (nhờ `UseApplyMigrations()` trong `Program.cs`).
 
-Hoặc bạn có thể apply migrations thủ công:
+Sau khi set environment variable và deploy backend:
+1. Backend sẽ tự động kết nối database
+2. Kiểm tra pending migrations
+3. Tự động apply migrations nếu có
 
-1. SSH vào backend service (nếu có)
-2. Hoặc chạy migrations từ local machine với connection string của Render
+**Kiểm tra logs trên Render.com:**
+- Tìm dòng: `[MIGRATION]` để xem trạng thái migrations
+- Nếu thành công: Sẽ không có log (migrations đã apply)
+- Nếu có lỗi: Sẽ có log `[MIGRATION] Error applying migrations: ...`
+
+**Nếu cần apply migrations thủ công (từ local machine):**
+
+1. Cập nhật `appsettings.Development.json` hoặc `appsettings.json` với connection string của Render:
+   ```json
+   {
+     "ConnectionStrings": {
+       "MSSQLServerDB": "Host=dpg-xxxxx-a.singapore-postgres.render.com;Port=5432;Database=artlinkdb;Username=artlinkuser;Password=password;SslMode=Require;Trust Server Certificate=true;"
+     }
+   }
+   ```
+
+2. Chạy migration command:
+   ```bash
+   cd src/Migrators.PostgreSQL
+   dotnet ef database update --context AppDBContext --startup-project ../WebApi
+   ```
+
+**Lưu ý:** Migrations đã được tạo sẵn trong `src/Migrators.PostgreSQL/Migrations/`, không cần tạo mới.
 
 ## Bước 6: Kiểm tra
 
