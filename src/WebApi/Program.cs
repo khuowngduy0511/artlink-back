@@ -1,4 +1,5 @@
 using Application;
+using Application.AppConfigurations;
 using Application.Commons;
 using Application.Services.ELK;
 using Infrastructure;
@@ -35,7 +36,7 @@ Console.WriteLine($"[CONFIG] JWT SecretKey Preview: {keyPreview}...");
 // Ensure ConnectionStrings is initialized
 if (config.ConnectionStrings == null)
 {
-    config.ConnectionStrings = new ConnectionStrings();
+    config.ConnectionStrings = new Application.AppConfigurations.ConnectionStrings();
 }
 
 // Get connection string from configuration
