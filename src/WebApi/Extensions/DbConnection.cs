@@ -8,8 +8,8 @@ public static class DbConnection
     public static IServiceCollection AddDbContextConfiguration(this IServiceCollection services, string connectionString)
     {
         services.AddDbContext<AppDBContext>(opt =>
-            opt.UseSqlServer(connectionString,
-                        x => x.MigrationsAssembly("Migrators.MSSQL")));
+            opt.UseNpgsql(connectionString,
+                        x => x.MigrationsAssembly("Migrators.PostgreSQL")));
         return services;
     }
 }
