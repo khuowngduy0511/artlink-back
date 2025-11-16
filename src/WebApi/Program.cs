@@ -3,6 +3,8 @@ using Application.AppConfigurations;
 using Application.Commons;
 using Application.Services.ELK;
 using Infrastructure;
+using System.Net;
+using System.Net.Sockets;
 using System.Text.Json.Serialization;
 using WebApi;
 using WebApi.Extensions;
@@ -74,6 +76,38 @@ if (!connectionString.Contains("Host=") && !connectionString.Contains("Server=")
 {
     Console.WriteLine($"[CONFIG] ERROR: Invalid connection string format. First 100 chars: {connectionString.Substring(0, Math.Min(100, connectionString.Length))}");
     throw new InvalidOperationException("Connection string format is invalid. Expected PostgreSQL format starting with 'Host=' or SQL Server format starting with 'Server='.");
+}
+
+// Force IPv4 for PostgreSQL connection (Render.com doesn't support IPv6)
+// Resolve hostname to IPv4 address to avoid IPv6 connection issues
+if (connectionString.Contains("Host="))
+{
+    try
+    {
+        var hostPart = connectionString.Split(';').FirstOrDefault(s => s.StartsWith("Host="));
+        if (hostPart != null)
+        {
+            var hostname = hostPart.Replace("Host=", "").Trim();
+            // Resolve to IPv4 address
+            var addresses = System.Net.Dns.GetHostAddresses(hostname);
+            var ipv4Address = addresses.FirstOrDefault(ip => ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
+            
+            if (ipv4Address != null)
+            {
+                // Replace hostname with IPv4 address
+                connectionString = connectionString.Replace($"Host={hostname}", $"Host={ipv4Address}");
+                Console.WriteLine($"[CONFIG] Resolved {hostname} to IPv4: {ipv4Address}");
+            }
+            else
+            {
+                Console.WriteLine($"[CONFIG] WARNING: Could not resolve {hostname} to IPv4 address. Using hostname directly.");
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"[CONFIG] WARNING: Failed to resolve hostname to IPv4: {ex.Message}. Using original connection string.");
+    }
 }
 
 config.ConnectionStrings.MSSQLServerDB = connectionString;
