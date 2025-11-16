@@ -39,27 +39,11 @@ if (config.ConnectionStrings == null)
     config.ConnectionStrings = new Application.AppConfigurations.ConnectionStrings();
 }
 
-// Get connection string from multiple sources (priority: env var > config file)
-// Render.com uses environment variables, so check those first
-var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__MSSQLServerDB")
-    ?? Environment.GetEnvironmentVariable("MSSQLServerDB")
+// Get connection string from environment variable (Render.com uses DATABASE_CONNECTION_STRING)
+var connectionString = Environment.GetEnvironmentVariable("DATABASE_CONNECTION_STRING")
     ?? builder.Configuration.GetConnectionString("MSSQLServerDB")
-    ?? config.ConnectionStrings?.MSSQLServerDB;
-
-if (string.IsNullOrEmpty(connectionString))
-{
-    // Log all available connection strings for debugging
-    Console.WriteLine("[CONFIG] Available connection strings:");
-    var allConnectionStrings = builder.Configuration.GetSection("ConnectionStrings").GetChildren();
-    foreach (var cs in allConnectionStrings)
-    {
-        Console.WriteLine($"[CONFIG]   {cs.Key}: {(string.IsNullOrEmpty(cs.Value) ? "(empty)" : cs.Value.Substring(0, Math.Min(50, cs.Value.Length)) + "...")}");
-    }
-    Console.WriteLine("[CONFIG] Environment variables:");
-    Console.WriteLine($"[CONFIG]   ConnectionStrings__MSSQLServerDB: {(Environment.GetEnvironmentVariable("ConnectionStrings__MSSQLServerDB") != null ? "exists" : "not found")}");
-    Console.WriteLine($"[CONFIG]   MSSQLServerDB: {(Environment.GetEnvironmentVariable("MSSQLServerDB") != null ? "exists" : "not found")}");
-    throw new InvalidOperationException("Connection string 'MSSQLServerDB' is required but not found in configuration or environment variables.");
-}
+    ?? config.ConnectionStrings?.MSSQLServerDB
+    ?? throw new InvalidOperationException("Connection string 'DATABASE_CONNECTION_STRING' or 'MSSQLServerDB' is required but not found in environment variables or configuration.");
 
 config.ConnectionStrings.MSSQLServerDB = connectionString;
 Console.WriteLine($"[CONFIG] Database: {connectionString.Split(';').FirstOrDefault(s => s.StartsWith("Host="))?.Replace("Host=", "") ?? "unknown"}");
