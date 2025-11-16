@@ -97,15 +97,44 @@ public class CommentService : ICommentService
     public async Task<List<CommentVM>> GetCommentsByArtworkAsync(Guid artworkId)
     {
         var comments = await _unitOfWork.CommentRepository.GetCommentsWithRepliesAsync(artworkId);
-        var commentVM = _mapper.Map<List<CommentVM>>(comments);
-        //commentVM.Replies = null;
+        
+        // Filter: Only get parent comments (ReplyId == null) and filter deleted replies
+        var parentComments = comments
+            .Where(c => c.ReplyId == null)
+            .ToList();
+        
+        // Filter deleted replies for each parent comment
+        foreach (var comment in parentComments)
+        {
+            if (comment.Replies != null)
+            {
+                comment.Replies = comment.Replies.Where(r => r.DeletedOn == null).ToList();
+            }
+        }
+        
+        var commentVM = _mapper.Map<List<CommentVM>>(parentComments);
         return commentVM;
     }
 
     public async Task<List<CommentVM>> GetCommentsByArtworkWithRepliesAsync(Guid artworkId)
     {
         var comments = await _unitOfWork.CommentRepository.GetCommentsWithRepliesAsync(artworkId);
-        var commentVMs = _mapper.Map<List<CommentVM>>(comments);
+        
+        // Filter: Only get parent comments (ReplyId == null) and filter deleted replies
+        var parentComments = comments
+            .Where(c => c.ReplyId == null)
+            .ToList();
+        
+        // Filter deleted replies for each parent comment
+        foreach (var comment in parentComments)
+        {
+            if (comment.Replies != null)
+            {
+                comment.Replies = comment.Replies.Where(r => r.DeletedOn == null).ToList();
+            }
+        }
+        
+        var commentVMs = _mapper.Map<List<CommentVM>>(parentComments);
         return commentVMs;
     }
 
@@ -122,6 +151,17 @@ public class CommentService : ICommentService
     public async Task<CommentVM?> GetCommentByIdAsync(Guid commentId)
     {
         var comment = await _unitOfWork.CommentRepository.GetCommentById(commentId);
+        if (comment == null || comment.DeletedOn != null)
+        {
+            return null;
+        }
+        
+        // Filter deleted replies
+        if (comment.Replies != null)
+        {
+            comment.Replies = comment.Replies.Where(r => r.DeletedOn == null).ToList();
+        }
+        
         return _mapper.Map<CommentVM?>(comment);
     }
 
@@ -151,7 +191,26 @@ public class CommentService : ICommentService
         var comments = await _unitOfWork.CommentRepository
             .GetCommentsWithRepliesPaginationAsync(artworkId,
                                             pagecriteria.PageNumber, pagecriteria.PageSize);
-        var commentVMs = _mapper.Map<PagedList<CommentVM>>(comments);
-        return commentVMs;
+        
+        // Filter: Only get parent comments (ReplyId == null) and filter deleted replies
+        var filteredComments = comments.Items
+            .Where(c => c.ReplyId == null)
+            .ToList();
+        
+        // Filter deleted replies for each parent comment
+        foreach (var comment in filteredComments)
+        {
+            if (comment.Replies != null)
+            {
+                comment.Replies = comment.Replies.Where(r => r.DeletedOn == null).ToList();
+            }
+        }
+        
+        var commentVMs = _mapper.Map<List<CommentVM>>(filteredComments);
+        return new PagedList<CommentVM>(
+            commentVMs,
+            filteredComments.Count, // Update total count to reflect filtered parent comments
+            comments.PageNumber,
+            comments.PageSize);
     }
 }

@@ -38,8 +38,22 @@ public class TagService : ITagService
 
     public async Task<List<TagVM>> SearchTagsByNameAsync(string keyword)
     {
+        // Normalize keyword for case-insensitive search
+        var normalizedKeyword = string.IsNullOrWhiteSpace(keyword) 
+            ? string.Empty 
+            : keyword.Trim().ToLower();
+        
         var tagList = await _unitOfWork.TagRepository
-            .SearchTagsByNameAsync(keyword);
+            .SearchTagsByNameAsync(normalizedKeyword);
+        
+        // Additional filtering in memory for case-insensitive matching
+        if (!string.IsNullOrWhiteSpace(normalizedKeyword))
+        {
+            tagList = tagList
+                .Where(t => t.TagName.ToLower().Contains(normalizedKeyword))
+                .ToList();
+        }
+        
         var tagVMList = _mapper.Map<List<TagVM>>(tagList);
         return tagVMList;
     }

@@ -24,14 +24,12 @@ public class CommentRepository : GenericAuditableRepository<Comment>, ICommentRe
     }
     public async Task<List<Comment>> GetCommentsWithRepliesAsync(Guid artworkId)
     {
-        // Only get parent comments (ReplyId == null), then include their replies
         return await _dbContext.Comments
             .Where(x => x.ArtworkId == artworkId
-                    && x.ReplyId == null  // Only parent comments
-                    && x.DeletedOn == null)
+                && x.DeletedOn == null)
             .Include(x => x.Account)
-            .Include(x => x.Replies.Where(r => r.DeletedOn == null))  // Include only non-deleted replies
-                .ThenInclude(r => r.Account)  // Include Account for each reply
+            .Include(x => x.Replies)
+                .ThenInclude(r => r.Account)
             .OrderByDescending(x => x.CreatedOn)
             .ToListAsync();
     }
@@ -40,21 +38,19 @@ public class CommentRepository : GenericAuditableRepository<Comment>, ICommentRe
     {
         return await _dbContext.Comments
             .Include(x => x.Account)
-            .Include(x => x.Replies.Where(r => r.DeletedOn == null))  // Include only non-deleted replies
-                .ThenInclude(r => r.Account)  // Include Account for each reply
+            .Include(x => x.Replies)
+                .ThenInclude(r => r.Account)
             .FirstOrDefaultAsync(x => x.Id == commentId);
     }
 
     public async Task<IPagedList<Comment>> GetCommentsWithRepliesPaginationAsync(Guid artworkId, int pageNumber, int pageSize)
     {
-        // Only get parent comments (ReplyId == null), then include their replies
         var commentsList = _dbContext.Comments
             .Where(x => x.ArtworkId == artworkId
-                    && x.ReplyId == null  // Only parent comments
-                    && x.DeletedOn == null)
+                && x.DeletedOn == null)
             .Include(x => x.Account)
-            .Include(x => x.Replies.Where(r => r.DeletedOn == null))  // Include only non-deleted replies
-                .ThenInclude(r => r.Account)  // Include Account for each reply
+            .Include(x => x.Replies)
+                .ThenInclude(r => r.Account)
             .OrderByDescending(x => x.CreatedOn);
 
         var result = await ToPaginationAsync(commentsList, pageNumber, pageSize);

@@ -18,8 +18,7 @@ public class TagRepository : GenericRepository<Tag>, ITagRepository
 
         if (!string.IsNullOrEmpty(keyword))
         {
-            keyword = keyword.ToLower();
-            allTags = allTags.Where(x => x.TagName.ToLower().Contains(keyword));
+            allTags = allTags.Where(x => EF.Functions.Like(x.TagName, $"%{keyword}%"));
         }
 
         #region sorting
@@ -55,10 +54,8 @@ public class TagRepository : GenericRepository<Tag>, ITagRepository
                 .ToListAsync();
         }
         
-        // Case-insensitive search using ToLower for better matching
-        keyword = keyword.ToLower().Trim();
         return await _dbContext.Tags
-            .Where(x => x.TagName.ToLower().Contains(keyword))
+            .Where(x => EF.Functions.Like(x.TagName, $"%{keyword}%"))
             .OrderBy(x => x.TagName)
             .Take(20)
             .ToListAsync();
