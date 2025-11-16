@@ -164,11 +164,13 @@ builder.Services.AddCors(options =>
     {
         builder.WithOrigins(
             "https://artlink-front.vercel.app",  // Domain Vercel của bạn
-            "http://localhost:3000"         // Cho dev
+            "http://localhost:3000",         // Cho dev
+            "http://localhost:3001"          // Cho dev alternative port
         )
         .AllowAnyMethod()
         .AllowAnyHeader()
-        .AllowCredentials();
+        .AllowCredentials()
+        .SetIsOriginAllowedToAllowWildcardSubdomains(); // Allow subdomains if needed
     });
 });
 
@@ -199,11 +201,12 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = "swagger"; // Set Swagger UI at /swagger
 });
 
+// CORS must be before UseAuthentication and UseAuthorization
+app.UseCors("AllowSpecificOrigin");
+
 app.UseHttpsRedirection();
 
 app.UseStaticFiles(); // Use static files
-
-app.UseCors("AllowSpecificOrigin"); // Use CORS with specific policy
 
 // Add logging middleware for debugging
 app.Use(async (context, next) =>

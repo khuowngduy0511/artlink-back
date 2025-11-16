@@ -2,7 +2,9 @@
 
 public class CurrentTime
 {
-    public static DateTime GetCurrentTime => DateTime.UtcNow.ToLocalTime();
+    // PostgreSQL requires UTC DateTime for 'timestamp with time zone'
+    // Changed from ToLocalTime() to UTC to fix PostgreSQL compatibility
+    public static DateTime GetCurrentTime => DateTime.UtcNow;
 
     public static long GetTimeStamp()
     {
