@@ -85,60 +85,75 @@ public class ArtworkService : IArtworkService
     {
         Guid? loginId = _claimService.GetCurrentUserId;
 
+        var boolQuery = new BoolQuery
+        {
+            MustNot = new List<QueryContainer>
+            {
+                new ExistsQuery
+                {
+                    Field = "deletedOn"
+                }
+            },
+            Filter = new List<QueryContainer>
+            {
+                new TermQuery
+                {
+                    Field = "state",
+                    Value = "accepted"
+                },
+                new TermQuery
+                {
+                    Field = "privacy",
+                    Value = "public"
+                }
+            }
+        };
+
+        // Only add keyword search if keyword is provided
+        if (!string.IsNullOrWhiteSpace(criteria.Keyword))
+        {
+            boolQuery.Should = new List<QueryContainer>
+            {
+                // Keyword search in title and account fields
+                new MultiMatchQuery
+                {
+                    Fields = new[] { "title", "account.email", "account.fullname", "account.username" },
+                    Query = criteria.Keyword
+                },
+                // Nested query for tags - search in tagName field
+                new NestedQuery
+                {
+                    Path = "tagList",
+                    Query = new MatchQuery
+                    {
+                        Field = "tagList.tagName",
+                        Query = criteria.Keyword,
+                        Operator = Operator.Or,
+                        Fuzziness = Fuzziness.Auto
+                    }
+                },
+                // Nested query for categories - search in categoryName field
+                new NestedQuery
+                {
+                    Path = "categoryList",
+                    Query = new MatchQuery
+                    {
+                        Field = "categoryList.categoryName",
+                        Query = criteria.Keyword,
+                        Operator = Operator.Or,
+                        Fuzziness = Fuzziness.Auto
+                    }
+                }
+            };
+            // Minimum should match: at least one should clause must match
+            boolQuery.MinimumShouldMatch = 1;
+        }
+
         var searchRequest = new SearchRequest<ArtworksV2>
         {
             From = (criteria.PageNumber - 1) * criteria.PageSize,
             Size = criteria.PageSize,
-            Query = new BoolQuery
-            {
-                MustNot = new List<QueryContainer>
-                {
-                    new ExistsQuery
-                    {
-                        Field = "deletedOn"
-                    }
-                },
-                Filter = new List<QueryContainer>
-                {
-                    new TermQuery
-                    {
-                        Field = "state",
-                        Value = "accepted"
-                    },
-                    new TermQuery
-                    {
-                        Field = "privacy",
-                        Value = "public"
-                    }
-                },
-                Should = new List<QueryContainer>
-                {
-                    // Keyword search (unchanged)
-                    new MultiMatchQuery
-                    {
-                        Fields = new[] { "title", "account.email", "account.fullname", "account.username" },
-                        Query = criteria.Keyword
-                    },
-                    // Nested query for tags
-                    new NestedQuery
-                    {
-                        Path = "tagList", // Replace with the actual path to your nested object
-                        Query = new QueryStringQuery
-                        {
-                            Query = criteria.Keyword // Replace with the search term for tags
-                        }
-                    },
-                    // Nested query for categories (optional)
-                    new NestedQuery
-                    {
-                        Path = "categoryList", // Replace with the actual path to your nested object
-                        Query = new QueryStringQuery
-                        {
-                            Query = criteria.Keyword // Replace with the search term for categories
-                        }
-                    }
-                }
-            },
+            Query = boolQuery,
             Sort = new List<ISort>
             {
                 new FieldSort

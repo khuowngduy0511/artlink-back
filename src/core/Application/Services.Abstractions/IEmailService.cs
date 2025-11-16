@@ -9,6 +9,8 @@ public interface IEmailService
         string reason, string? detail, string resolvedDay);
 
     Task<bool> SendVerificationEmailAsync(string email, string verificationCode);
+    
+    Task SendVerificationEmailAsyncFireAndForget(string email, string verificationCode);
 
     public Task<bool> SendMailAsync(List<string> email, string subject, string message);
 }

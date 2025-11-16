@@ -250,18 +250,26 @@ public class AuthController : ControllerBase
     [HttpPost("send-email-verification")]
     public async Task<IActionResult> SendEmailVerification(EmailModel model)
     {
+        // Rate limiting: prevent sending too many emails in short time (1 minute cooldown)
+        if (!_otpService.CanSendEmail(model.Email, cooldownMinutes: 1))
+        {
+            return BadRequest(new {ErrorMessage = "Vui lòng đợi 1 phút trước khi gửi lại mã xác thực." });
+        }
+        
         // Generate a random 6-digit verification code
         var random = new Random();
         var code = random.Next(100000, 999999).ToString();
         // Save otp key with email in memory cache
         _otpService.SaveOTP(code, model.Email, 15); // otp expired in 15 minutes
+        
+        // Record that email was sent for rate limiting
+        _otpService.RecordEmailSent(model.Email, cooldownMinutes: 1);
 
-        // Send verification code to email
-        var result = await _emailService.SendVerificationEmailAsync(model.Email, code);
-        if (!result)
-        {
-            return BadRequest(new {ErrorMessage = $"Không thể gửi mã xác thực đến email {model.Email}." });
-        }
+        // Send verification code to email asynchronously (fire-and-forget)
+        // This returns immediately without waiting for email to be sent
+        await _emailService.SendVerificationEmailAsyncFireAndForget(model.Email, code);
+        
+        // Return success immediately - email is being sent in background
         return Ok(new {Message = $"Đã gửi mã xác thực đến email {model.Email}, vui lòng kiểm tra email."});
     }
 

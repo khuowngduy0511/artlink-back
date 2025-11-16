@@ -1,6 +1,5 @@
 ﻿using Application.Models;
 using Application.Services.Abstractions;
-using Application.Services.GoogleStorage;
 using AutoMapper;
 using Domain.Entitites;
 using Domain.Enums;
@@ -14,7 +13,6 @@ public class ProposalAssetService : IProposalAssetService
     private static readonly string PARENT_FOLDER = "ProposalAsset";
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
-    private readonly ICloudStorageService _cloudStorageService;
     private readonly ICloudinaryService _cloudinaryService;
     private readonly IClaimService _claimService;
     private readonly IMilestoneService _milstoneService;
@@ -23,14 +21,12 @@ public class ProposalAssetService : IProposalAssetService
     public ProposalAssetService(
         IUnitOfWork unitOfWork,
         IMapper mapper,
-        ICloudStorageService cloudStorageService,
         ICloudinaryService cloudinaryService,
         IMilestoneService milstoneService,
         IClaimService claimService)
     {
         _unitOfWork = unitOfWork;
         _mapper = mapper;
-        _cloudStorageService = cloudStorageService;
         _cloudinaryService = cloudinaryService;
         _milstoneService = milstoneService;
         _claimService = claimService;
@@ -100,10 +96,10 @@ public class ProposalAssetService : IProposalAssetService
         var proposalAsset = await _unitOfWork.ProposalAssetRepository.GetProposalAssetsWithProposalAsync(proposalAssetId)
             ?? throw new KeyNotFoundException("Không tìm thấy tài nguyên thỏa thuận.");
         
-        // TEMPORARY FIX: Return local file URL instead of cloud storage
+        // Kiểm tra quyền truy cập
         if (_claimService.IsModeratorOrAdmin())
         {
-            return proposalAsset.Location; // Return local URL
+            return proposalAsset.Location; // Return Cloudinary URL
         }
 
         // kiem tra xem user da mua asset chua
@@ -120,8 +116,71 @@ public class ProposalAssetService : IProposalAssetService
             throw new UnauthorizedAccessException("Phải hoàn tất thanh toán trước khi tải.");
         }
 
-        return proposalAsset.Location; // Return local URL
+        // Return Cloudinary URL (file được upload với isPublic = false nên cần signed URL nếu cần)
+        return proposalAsset.Location;
+    }
 
+    /// <summary>
+    /// Download proposal asset dưới dạng stream - Backend làm proxy để bảo mật
+    /// </summary>
+    public async Task<(Stream stream, string fileName, string contentType)> DownloadProposalAssetAsync(Guid proposalAssetId)
+    {
+        Guid loginId = _claimService.GetCurrentUserId ?? default!;
+
+        var proposalAsset = await _unitOfWork.ProposalAssetRepository.GetProposalAssetsWithProposalAsync(proposalAssetId)
+            ?? throw new KeyNotFoundException("Không tìm thấy tài nguyên thỏa thuận.");
+
+        // Kiểm tra quyền truy cập (giống GetDownloadUriProposalAssetAsync)
+        if (!_claimService.IsModeratorOrAdmin())
+        {
+            if (proposalAsset.Proposal.CreatedBy!.Value != loginId
+                && proposalAsset.Proposal.OrdererId != loginId)
+            {
+                throw new UnauthorizedAccessException("Bạn không có quyền tải tài nguyên này.");
+            }
+
+            if (proposalAsset.Proposal.OrdererId == loginId &&
+                proposalAsset.Type == ProposalAssetEnum.Final &&
+                proposalAsset.Proposal.ProposalStatus != ProposalStateEnum.CompletePayment)
+            {
+                throw new UnauthorizedAccessException("Phải hoàn tất thanh toán trước khi tải.");
+            }
+        }
+
+        // Download file từ Cloudinary qua backend (bảo mật)
+        var stream = await _cloudinaryService.DownloadFileAsync(proposalAsset.Location);
+        
+        // Trả về stream + thông tin file
+        var fileName = proposalAsset.ProposalAssetName;
+        var contentType = GetContentType(proposalAsset.ContentType);
+        
+        return (stream, fileName, contentType);
+    }
+
+    /// <summary>
+    /// Helper để lấy MIME type từ file extension
+    /// </summary>
+    private string GetContentType(string extension)
+    {
+        extension = extension.ToLower().TrimStart('.');
+        return extension switch
+        {
+            "jpg" or "jpeg" => "image/jpeg",
+            "png" => "image/png",
+            "gif" => "image/gif",
+            "bmp" => "image/bmp",
+            "webp" => "image/webp",
+            "pdf" => "application/pdf",
+            "zip" => "application/zip",
+            "rar" => "application/x-rar-compressed",
+            "7z" => "application/x-7z-compressed",
+            "psd" => "application/octet-stream",
+            "ai" => "application/postscript",
+            "mp4" => "video/mp4",
+            "mov" => "video/quicktime",
+            "avi" => "video/x-msvideo",
+            _ => "application/octet-stream"
+        };
     }
 
     public async Task<List<ProposalAssetVM>> GetProposalAssetsOfProposalAsync(Guid proposalId)

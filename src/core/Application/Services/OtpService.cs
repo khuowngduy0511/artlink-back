@@ -26,4 +26,19 @@ public class OtpService : IOtpService
         // Save OTP and email to cache
         _memoryCache.Set(key, email, expiration);
     }
+    
+    public bool CanSendEmail(string email, int cooldownMinutes = 1)
+    {
+        // Check if email has a cooldown period
+        var cacheKey = $"email_cooldown_{email}";
+        return !_memoryCache.TryGetValue(cacheKey, out _);
+    }
+    
+    public void RecordEmailSent(string email, int cooldownMinutes = 1)
+    {
+        // Record that email was sent to prevent spam
+        var cacheKey = $"email_cooldown_{email}";
+        var expiration = TimeSpan.FromMinutes(cooldownMinutes);
+        _memoryCache.Set(cacheKey, DateTime.UtcNow, expiration);
+    }
 }

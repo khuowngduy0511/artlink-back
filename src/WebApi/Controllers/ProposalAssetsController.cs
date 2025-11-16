@@ -65,27 +65,14 @@ public class ProposalAssetsController : ControllerBase
     {
         try
         {
-            var filePath = await _proposalAssetService.GetDownloadUriProposalAssetAsync(proposalAssetId);
+            var result = await _proposalAssetService.DownloadProposalAssetAsync(proposalAssetId);
             
-            if (string.IsNullOrEmpty(filePath))
+            if (result.stream == null || string.IsNullOrEmpty(result.fileName))
             {
                 return NotFound(new ApiResponse { ErrorMessage = "File không tồn tại." });
             }
 
-            // Remove leading slash if present
-            var localPath = filePath.TrimStart('/');
-            var fullPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", localPath);
-
-            if (!System.IO.File.Exists(fullPath))
-            {
-                return NotFound(new ApiResponse { ErrorMessage = "File không tồn tại trên server." });
-            }
-
-            var fileBytes = await System.IO.File.ReadAllBytesAsync(fullPath);
-            var fileName = Path.GetFileName(fullPath);
-            var contentType = GetContentType(fileName);
-
-            return File(fileBytes, contentType, fileName);
+            return File(result.stream, result.contentType, result.fileName);
         }
         catch (KeyNotFoundException ex)
         {
@@ -100,22 +87,6 @@ public class ProposalAssetsController : ControllerBase
             Console.WriteLine($"[DownloadProposalAssetFile] Error: {ex.Message}");
             return StatusCode(500, new ApiResponse { ErrorMessage = ex.Message });
         }
-    }
-
-    private string GetContentType(string fileName)
-    {
-        var extension = Path.GetExtension(fileName).ToLowerInvariant();
-        return extension switch
-        {
-            ".jpg" or ".jpeg" => "image/jpeg",
-            ".png" => "image/png",
-            ".gif" => "image/gif",
-            ".pdf" => "application/pdf",
-            ".zip" => "application/zip",
-            ".psd" => "image/vnd.adobe.photoshop",
-            ".ai" => "application/postscript",
-            _ => "application/octet-stream",
-        };
     }
 
     [HttpPost]

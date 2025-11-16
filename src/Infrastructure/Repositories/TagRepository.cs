@@ -47,8 +47,19 @@ public class TagRepository : GenericRepository<Tag>, ITagRepository
 
     public async Task<List<Tag>> SearchTagsByNameAsync(string keyword)
     {
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            return await _dbContext.Tags
+                .OrderBy(x => x.TagName)
+                .Take(20)
+                .ToListAsync();
+        }
+        
+        // Case-insensitive search using ToLower for better matching
+        keyword = keyword.ToLower().Trim();
         return await _dbContext.Tags
-            .Where(x => EF.Functions.Like(x.TagName, $"%{keyword}%"))
+            .Where(x => x.TagName.ToLower().Contains(keyword))
+            .OrderBy(x => x.TagName)
             .Take(20)
             .ToListAsync();
     }

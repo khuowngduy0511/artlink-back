@@ -72,6 +72,26 @@ Cảm ơn,
 Artlink.";
         return await SendMailAsync(new List<string> { email }, "[Artlink] Xác thực email", message);
     }
+    
+    public Task SendVerificationEmailAsyncFireAndForget(string email, string verificationCode)
+    {
+        // Fire-and-forget: don't wait for email to be sent, return immediately
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await SendVerificationEmailAsync(email, verificationCode);
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't throw (fire-and-forget pattern)
+                Console.WriteLine($"[EMAIL ERROR] Failed to send verification email to {email}: {ex.Message}");
+            }
+        });
+        
+        // Return completed task immediately - email is being sent in background
+        return Task.CompletedTask;
+    }
     public async Task<bool> SendMailAsync(List<string> emails, string subject, string message)
     {
         try
@@ -88,6 +108,7 @@ Artlink.";
             myMessage.From = new MailAddress(email, dispayName);
             myMessage.Subject = subject;
             myMessage.Body = message;
+            
             using (SmtpClient smtp = new SmtpClient())
             {
                 smtp.EnableSsl = true;
@@ -96,7 +117,9 @@ Artlink.";
                 smtp.UseDefaultCredentials = false;
                 smtp.Credentials = new NetworkCredential(email, password);
                 smtp.DeliveryMethod = SmtpDeliveryMethod.Network;
-                smtp.SendCompleted += (s, e) => { smtp.Dispose(); };
+                // Add timeout to prevent long waits (10 seconds)
+                smtp.Timeout = 10000;
+                // Send email asynchronously with timeout protection
                 await smtp.SendMailAsync(myMessage);
             }
             return true;
