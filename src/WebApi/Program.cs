@@ -17,7 +17,11 @@ builder.Services.AddOpenApiDocumentation(); // Add Swagger config
 
 // Bind AppConfiguration from configuration
 var config = builder.Configuration.Get<AppConfiguration>();
-builder.Configuration.Bind(config);
+if (config == null)
+{
+    config = new AppConfiguration();
+    builder.Configuration.Bind(config);
+}
 
 // 🔍 DEBUG: Log SecretKey metadata to verify env vars are loaded (without exposing the full value)
 var secretKey = config?.JwtConfiguration?.SecretKey ?? string.Empty;
@@ -28,10 +32,24 @@ Console.WriteLine($"[CONFIG] JWT Issuer: {issuer}");
 Console.WriteLine($"[CONFIG] JWT SecretKey Length: {secretKey.Length} chars");
 Console.WriteLine($"[CONFIG] JWT SecretKey Preview: {keyPreview}...");
 
-builder.Services.AddSingleton(config!);
+// Ensure ConnectionStrings is initialized
+if (config.ConnectionStrings == null)
+{
+    config.ConnectionStrings = new ConnectionStrings();
+}
+
+// Get connection string from configuration
+var connectionString = builder.Configuration.GetConnectionString("MSSQLServerDB") 
+    ?? config.ConnectionStrings.MSSQLServerDB 
+    ?? throw new InvalidOperationException("Connection string 'MSSQLServerDB' is required but not found in configuration.");
+
+config.ConnectionStrings.MSSQLServerDB = connectionString;
+Console.WriteLine($"[CONFIG] Database: {connectionString.Split(';').FirstOrDefault(s => s.StartsWith("Host="))?.Replace("Host=", "") ?? "unknown"}");
+
+builder.Services.AddSingleton(config);
 
 // Add dbcontext middlerware
-builder.Services.AddDbContextConfiguration(config!.ConnectionStrings.MSSQLServerDB);
+builder.Services.AddDbContextConfiguration(connectionString);
 
 // Add jwt configuration
 builder.Services.AddJwtConfiguration(config!);
