@@ -210,7 +210,7 @@ public class CommentService : ICommentService
         return new PagedList<CommentVM>(
             commentVMs,
             filteredComments.Count, // Update total count to reflect filtered parent comments
-            comments.PageNumber,
+            comments.CurrentPage,
             comments.PageSize);
     }
 }
