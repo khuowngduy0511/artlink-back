@@ -368,3 +368,11 @@ src/WebApi/wwwroot/Asset/
 # Sensitive configuration files
 **/appsettings.Production.json
 **/appsettings.Staging.json
+
+# Migration helper scripts and docs (temporary files)
+*.ps1
+*.md
+*.sql
+!README.md
+!POSTGRESQL_DEPLOYMENT.md
+!QUICK_START_POSTGRESQL.md

@@ -11,19 +11,37 @@ public class AppDBContextFactory : IDesignTimeDbContextFactory<AppDBContext>
 {
     public AppDBContext CreateDbContext(string[] args)
     {
-        // Build configuration
+        // Build configuration - use project directory, not current directory
+        var basePath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "..", ".."));
+        var appsettingsPath = Path.Combine(basePath, "appsettings.json");
+        
+        // If appsettings.json doesn't exist in parent, try current directory
+        if (!File.Exists(appsettingsPath))
+        {
+            appsettingsPath = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json");
+        }
+        
         var configuration = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
-            .AddJsonFile("appsettings.json", optional: false)
+            .SetBasePath(Path.GetDirectoryName(appsettingsPath) ?? Directory.GetCurrentDirectory())
+            .AddJsonFile(Path.GetFileName(appsettingsPath), optional: false)
             .Build();
+
+        // Get connection string from configuration
+        var connectionString = configuration.GetConnectionString("MSSQLServerDB");
+        
+        if (string.IsNullOrEmpty(connectionString))
+        {
+            throw new InvalidOperationException("Connection string 'MSSQLServerDB' not found in appsettings.json");
+        }
+        
+        Console.WriteLine($"[AppDBContextFactory] Using connection string from appsettings.json");
 
         // Create AppConfiguration
         var appConfig = new AppConfiguration
         {
             ConnectionStrings = new ConnectionStrings
             {
-                MSSQLServerDB = configuration.GetConnectionString("MSSQLServerDB") 
-                    ?? "Host=localhost;Port=5432;Database=ArtLinkDB;Username=postgres;Password=postgres;"
+                MSSQLServerDB = connectionString
             }
         };
 
