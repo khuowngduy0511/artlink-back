@@ -79,34 +79,67 @@ if (!connectionString.Contains("Host=") && !connectionString.Contains("Server=")
 }
 
 // Force IPv4 for PostgreSQL connection (Render.com doesn't support IPv6)
-// Resolve hostname to IPv4 address to avoid IPv6 connection issues
+// Try to resolve hostname to IPv4 address with retry logic
 if (connectionString.Contains("Host="))
 {
-    try
+    var hostPart = connectionString.Split(';').FirstOrDefault(s => s.StartsWith("Host="));
+    if (hostPart != null)
     {
-        var hostPart = connectionString.Split(';').FirstOrDefault(s => s.StartsWith("Host="));
-        if (hostPart != null)
+        var hostname = hostPart.Replace("Host=", "").Trim();
+        IPAddress? ipv4Address = null;
+        
+        // Try DNS resolution with retry (up to 3 times)
+        for (int attempt = 1; attempt <= 3; attempt++)
         {
-            var hostname = hostPart.Replace("Host=", "").Trim();
-            // Resolve to IPv4 address
-            var addresses = System.Net.Dns.GetHostAddresses(hostname);
-            var ipv4Address = addresses.FirstOrDefault(ip => ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
-            
-            if (ipv4Address != null)
+            try
             {
-                // Replace hostname with IPv4 address
-                connectionString = connectionString.Replace($"Host={hostname}", $"Host={ipv4Address}");
-                Console.WriteLine($"[CONFIG] Resolved {hostname} to IPv4: {ipv4Address}");
+                Console.WriteLine($"[CONFIG] Attempting DNS resolution (attempt {attempt}/3) for {hostname}...");
+                var addresses = System.Net.Dns.GetHostAddresses(hostname);
+                
+                // Log all addresses found
+                Console.WriteLine($"[CONFIG] Found {addresses.Length} address(es):");
+                foreach (var addr in addresses)
+                {
+                    Console.WriteLine($"[CONFIG]   - {addr} ({addr.AddressFamily})");
+                }
+                
+                ipv4Address = addresses.FirstOrDefault(ip => ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
+                
+                if (ipv4Address != null)
+                {
+                    Console.WriteLine($"[CONFIG] Successfully resolved {hostname} to IPv4: {ipv4Address}");
+                    break;
+                }
+                else
+                {
+                    Console.WriteLine($"[CONFIG] No IPv4 address found in DNS response. All addresses are IPv6.");
+                    Console.WriteLine($"[CONFIG] ERROR: Supabase database only has IPv6 addresses, but Render.com doesn't support IPv6.");
+                    Console.WriteLine($"[CONFIG] SOLUTION: You need to either:");
+                    Console.WriteLine($"[CONFIG]   1. Use Supabase connection pooling (recommended)");
+                    Console.WriteLine($"[CONFIG]   2. Use a different hosting provider that supports IPv6");
+                    Console.WriteLine($"[CONFIG]   3. Use Supabase's IPv4 endpoint if available");
+                }
             }
-            else
+            catch (Exception ex)
             {
-                Console.WriteLine($"[CONFIG] WARNING: Could not resolve {hostname} to IPv4 address. Using hostname directly.");
+                Console.WriteLine($"[CONFIG] DNS resolution attempt {attempt} failed: {ex.Message}");
+                if (attempt < 3)
+                {
+                    System.Threading.Thread.Sleep(1000); // Wait 1 second before retry
+                }
             }
         }
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"[CONFIG] WARNING: Failed to resolve hostname to IPv4: {ex.Message}. Using original connection string.");
+        
+        if (ipv4Address != null)
+        {
+            // Replace hostname with IPv4 address
+            connectionString = connectionString.Replace($"Host={hostname}", $"Host={ipv4Address}");
+        }
+        else
+        {
+            Console.WriteLine($"[CONFIG] FATAL: Cannot connect to Supabase - only IPv6 available but Render.com doesn't support IPv6.");
+            throw new InvalidOperationException("Cannot connect to Supabase database: Only IPv6 addresses are available, but Render.com doesn't support IPv6. Please use Supabase connection pooling or a different hosting provider.");
+        }
     }
 }
 
