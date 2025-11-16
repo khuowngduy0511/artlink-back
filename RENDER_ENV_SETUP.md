@@ -1,10 +1,11 @@
 # Hướng dẫn Set Environment Variable trên Render.com
 
-## ⚠️ QUAN TRỌNG: Vấn đề IPv6
+## ⚠️ LƯU Ý
 
-**Supabase database chỉ có IPv6, nhưng Render.com không hỗ trợ IPv6.**
+**Nếu bạn đang dùng Supabase:** Supabase database chỉ có IPv6, nhưng Render.com không hỗ trợ IPv6. 
+**Giải pháp:** Sử dụng **Render.com PostgreSQL Database** (miễn phí, có IPv4). Xem [RENDER_DATABASE_SETUP.md](./RENDER_DATABASE_SETUP.md) để tạo database trên Render.
 
-**Giải pháp:** Sử dụng **Supabase Connection Pooling** (cung cấp IPv4 endpoint).
+**Nếu bạn đã có Render.com PostgreSQL Database:** Sử dụng connection string từ Render.com database.
 
 ## Bước 1: Lấy Connection Pooling URL từ Supabase
 
