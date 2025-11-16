@@ -13,14 +13,23 @@
 
    **Option 1 (Khuyến nghị):**
    - **Key**: `ConnectionStrings__MSSQLServerDB`
-   - **Value**: 
+   - **Value**: (Copy toàn bộ dòng này, không có dấu cách thừa ở đầu/cuối)
      ```
      Host=db.nnkoptjcvwnhqrywidcj.supabase.co;Port=5432;Database=postgres;Username=postgres;Password=Matkhausieumanh123;SslMode=Require;Trust Server Certificate=true;
      ```
 
    **Option 2 (Nếu Option 1 không hoạt động):**
    - **Key**: `MSSQLServerDB`
-   - **Value**: (giống như trên)
+   - **Value**: (Copy toàn bộ dòng này, không có dấu cách thừa ở đầu/cuối)
+     ```
+     Host=db.nnkoptjcvwnhqrywidcj.supabase.co;Port=5432;Database=postgres;Username=postgres;Password=Matkhausieumanh123;SslMode=Require;Trust Server Certificate=true;
+     ```
+
+   **⚠️ LƯU Ý QUAN TRỌNG:**
+   - Không có dấu cách thừa ở đầu hoặc cuối connection string
+   - Không có dấu ngoặc kép `"` bao quanh value
+   - Copy chính xác connection string như trên
+   - Sau khi save, check logs để xem connection string có được đọc đúng không
 
 4. Click **Save Changes**
 
