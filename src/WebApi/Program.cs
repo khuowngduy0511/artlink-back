@@ -39,14 +39,48 @@ if (config.ConnectionStrings == null)
     config.ConnectionStrings = new Application.AppConfigurations.ConnectionStrings();
 }
 
-// Get connection string from environment variable (Render.com uses DATABASE_CONNECTION_STRING)
-var connectionString = Environment.GetEnvironmentVariable("DATABASE_CONNECTION_STRING")
+// Get connection string from multiple sources (priority: env var > config file)
+// Render.com uses environment variables, so check those first
+var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__MSSQLServerDB")
+    ?? Environment.GetEnvironmentVariable("MSSQLServerDB")
     ?? builder.Configuration.GetConnectionString("MSSQLServerDB")
-    ?? config.ConnectionStrings?.MSSQLServerDB
-    ?? throw new InvalidOperationException("Connection string 'DATABASE_CONNECTION_STRING' or 'MSSQLServerDB' is required but not found in environment variables or configuration.");
+    ?? config.ConnectionStrings?.MSSQLServerDB;
+
+// Trim whitespace and validate
+if (!string.IsNullOrEmpty(connectionString))
+{
+    connectionString = connectionString.Trim();
+}
+
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    // Log all available connection strings for debugging
+    Console.WriteLine("[CONFIG] Available connection strings:");
+    var allConnectionStrings = builder.Configuration.GetSection("ConnectionStrings").GetChildren();
+    foreach (var cs in allConnectionStrings)
+    {
+        Console.WriteLine($"[CONFIG]   {cs.Key}: {(string.IsNullOrEmpty(cs.Value) ? "(empty)" : cs.Value.Substring(0, Math.Min(50, cs.Value.Length)) + "...")}");
+    }
+    Console.WriteLine("[CONFIG] Environment variables:");
+    var envVar1 = Environment.GetEnvironmentVariable("ConnectionStrings__MSSQLServerDB");
+    var envVar2 = Environment.GetEnvironmentVariable("MSSQLServerDB");
+    Console.WriteLine($"[CONFIG]   ConnectionStrings__MSSQLServerDB: {(envVar1 != null ? $"exists (length: {envVar1.Length})" : "not found")}");
+    Console.WriteLine($"[CONFIG]   MSSQLServerDB: {(envVar2 != null ? $"exists (length: {envVar2.Length})" : "not found")}");
+    throw new InvalidOperationException("Connection string 'MSSQLServerDB' is required but not found in configuration or environment variables.");
+}
+
+// Validate connection string format (should start with Host= or Server=)
+if (!connectionString.Contains("Host=") && !connectionString.Contains("Server="))
+{
+    Console.WriteLine($"[CONFIG] ERROR: Invalid connection string format. First 100 chars: {connectionString.Substring(0, Math.Min(100, connectionString.Length))}");
+    throw new InvalidOperationException("Connection string format is invalid. Expected PostgreSQL format starting with 'Host=' or SQL Server format starting with 'Server='.");
+}
 
 config.ConnectionStrings.MSSQLServerDB = connectionString;
-Console.WriteLine($"[CONFIG] Database: {connectionString.Split(';').FirstOrDefault(s => s.StartsWith("Host="))?.Replace("Host=", "") ?? "unknown"}");
+var dbHost = connectionString.Split(';').FirstOrDefault(s => s.StartsWith("Host="))?.Replace("Host=", "") 
+    ?? connectionString.Split(';').FirstOrDefault(s => s.StartsWith("Server="))?.Replace("Server=", "") 
+    ?? "unknown";
+Console.WriteLine($"[CONFIG] Database connection configured. Host: {dbHost}");
 
 builder.Services.AddSingleton(config);
 
