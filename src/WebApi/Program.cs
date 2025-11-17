@@ -212,17 +212,26 @@ app.UseStaticFiles(); // Use static files
 app.Use(async (context, next) =>
 {
     var request = context.Request;
+    var isWebSocket = request.Path.Value?.Contains("/ws") ?? false;
+    
     Console.WriteLine($"[REQUEST] {request.Method} {request.Path} | QueryString: {request.QueryString}");
     
-    // Log Authorization header if present (skip WebSocket and public endpoints)
-    if (!request.Path.Value?.Contains("/ws") ?? false)
+    if (isWebSocket)
     {
+        Console.WriteLine($"[REQUEST] WebSocket request detected");
+        Console.WriteLine($"[REQUEST] Upgrade header: {request.Headers["Upgrade"]}");
+        Console.WriteLine($"[REQUEST] Connection header: {request.Headers["Connection"]}");
+        Console.WriteLine($"[REQUEST] Sec-WebSocket-Key: {request.Headers["Sec-WebSocket-Key"]}");
+        Console.WriteLine($"[REQUEST] Sec-WebSocket-Version: {request.Headers["Sec-WebSocket-Version"]}");
+    }
+    else
+    {
+        // Log Authorization header if present (skip WebSocket and public endpoints)
         if (request.Headers.ContainsKey("Authorization"))
         {
             var authHeader = request.Headers["Authorization"].ToString();
             Console.WriteLine($"[REQUEST] Authorization: {authHeader.Substring(0, Math.Min(50, authHeader.Length))}...");
         }
-        // Removed "No Authorization header" log for public endpoints
     }
     
     await next();

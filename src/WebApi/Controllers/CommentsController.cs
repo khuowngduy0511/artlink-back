@@ -60,12 +60,19 @@ public class CommentsController : ControllerBase
     [HttpGet]
     public async Task GetCommentsOfArtworkPaginationWebSocket(Guid artworkId, [FromQuery] PagedCriteria pagedCriteria)
     {
+        Console.WriteLine($"[WebSocket] Incoming request for artwork comments: {artworkId}");
+        Console.WriteLine($"[WebSocket] Path: {HttpContext.Request.Path}");
+        Console.WriteLine($"[WebSocket] IsWebSocketRequest: {HttpContext.WebSockets.IsWebSocketRequest}");
+        Console.WriteLine($"[WebSocket] WebSocketsSupported: {HttpContext.WebSockets.IsWebSocketRequest}");
+        
         try
         {
             if (HttpContext.WebSockets.IsWebSocketRequest)
             {
+                Console.WriteLine($"[WebSocket] Accepting WebSocket connection for artwork: {artworkId}");
                 using (var ws = await HttpContext.WebSockets.AcceptWebSocketAsync())
                 {
+                    Console.WriteLine($"[WebSocket] WebSocket connection accepted. State: {ws.State}");
                     while (ws.State == WebSocketState.Open)
                     {
                         var comments = await _commentService
@@ -80,18 +87,22 @@ public class CommentsController : ControllerBase
                         await Task.Delay(1000);
                     }
                     // close ws connection
+                    Console.WriteLine($"[WebSocket] Closing WebSocket connection for artwork: {artworkId}");
                     await ws.CloseAsync(WebSocketCloseStatus.NormalClosure,
                         "WebSocket connection closed by Server.", CancellationToken.None);
                 }
             }
             else
             {
+                Console.WriteLine($"[WebSocket] Not a WebSocket request! Request type: {HttpContext.Request.Protocol}");
                 HttpContext.Response.StatusCode = StatusCodes.Status406NotAcceptable;
                 await HttpContext.Response.WriteAsync("Only support WebSocket protocol!");
             }
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"[WebSocket] ERROR: {ex.Message}");
+            Console.WriteLine($"[WebSocket] Stack trace: {ex.StackTrace}");
             HttpContext.Response.StatusCode = StatusCodes.Status500InternalServerError;
             await HttpContext.Response.WriteAsync(ex.Message);
         }
