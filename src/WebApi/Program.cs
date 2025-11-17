@@ -230,18 +230,17 @@ app.Use(async (context, next) =>
     Console.WriteLine($"[RESPONSE] {request.Method} {request.Path} | Status: {context.Response.StatusCode}");
 });
 
-app.UseAuthentication(); // Use Authentication
-
-app.UseAuthorization();
-
-
-app.MapControllers();
-
-// using websocket
+// WebSocket middleware MUST be before MapControllers
 app.UseWebSockets(new WebSocketOptions
 {
     KeepAliveInterval = TimeSpan.FromSeconds(10)
 });
+
+app.UseAuthentication(); // Use Authentication
+
+app.UseAuthorization();
+
+app.MapControllers();
 app.UseApplyMigrations(); // Apply latest migrations, especially when running in Docker
 
 // Elasticsearch initialization disabled (not configured)
