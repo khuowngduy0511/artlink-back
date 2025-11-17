@@ -226,10 +226,54 @@ public class ArtworkService : IArtworkService
             }
         }
 
-        // Elasticsearch is disabled - use SQL search endpoint instead
+        // Elasticsearch is disabled - fallback to SQL search
         if (_elasticClient == null)
         {
-            throw new InvalidOperationException("Elasticsearch is not configured. Please use SQL search endpoint (/api/artworks) instead.");
+            // Convert ArtworkElasticCriteria to ArtworkCriteria for SQL search
+            var sqlCriteria = new ArtworkCriteria
+            {
+                Keyword = criteria.Keyword,
+                CategoryId = criteria.CategoryId,
+                PageNumber = criteria.PageNumber,
+                PageSize = criteria.PageSize,
+                SortColumn = criteria.SortColumn,
+                SortOrder = criteria.SortOrder
+            };
+
+            // Use SQL search as fallback
+            var sqlResults = await GetArtworksAsync(sqlCriteria);
+            
+            // Convert ArtworkPreviewVM to ArtworksV2
+            var artworksV2 = new List<ArtworksV2>();
+            foreach (var preview in sqlResults.Items)
+            {
+                // Load full artwork data to get nested properties
+                var fullArtwork = await _unitOfWork.ArtworkRepository.GetArtworkDetailByIdAsync(preview.Id);
+                if (fullArtwork != null && fullArtwork.DeletedOn == null && 
+                    fullArtwork.State == StateEnum.Accepted && fullArtwork.Privacy == PrivacyEnum.Public)
+                {
+                    var artworkV2 = ConvertToArtworksV2(fullArtwork, preview.IsLiked);
+                    artworksV2.Add(artworkV2);
+                }
+            }
+
+            // Filter by asset availability if specified
+            if (criteria.IsAssetAvailable != null && criteria.IsAssetAvailable.Value)
+            {
+                artworksV2 = artworksV2.Where(a => a.Assets != null && a.Assets.Any()).ToList();
+                
+                if (criteria.IsAssetFree != null && criteria.IsAssetFree.Value)
+                {
+                    artworksV2 = artworksV2.Where(a => a.Assets != null && a.Assets.Any(asset => asset.Price == 0)).ToList();
+                }
+            }
+
+            return new PagedList<ArtworksV2>(
+                artworksV2,
+                sqlResults.TotalCount,
+                criteria.PageNumber,
+                criteria.PageSize
+            );
         }
 
         var result2 = await _elasticClient.SearchAsync<ArtworksV2>(searchRequest);
@@ -389,10 +433,52 @@ public class ArtworkService : IArtworkService
             };
         }
 
-        // Elasticsearch is disabled - use SQL search endpoint instead
+        // Elasticsearch is disabled - fallback to SQL search
         if (_elasticClient == null)
         {
-            throw new InvalidOperationException("Elasticsearch is not configured. Please use SQL search endpoint (/api/artworks) instead.");
+            // For recommendation, if no artwork IDs provided, return popular artworks
+            if (criteria.ArtworkIds == null || criteria.ArtworkIds.Count == 0)
+            {
+                var sqlCriteria = new ArtworkCriteria
+                {
+                    PageNumber = criteria.PageNumber,
+                    PageSize = criteria.PageSize,
+                    SortColumn = "ViewCount",
+                    SortOrder = "desc"
+                };
+
+                var sqlResults = await GetArtworksAsync(sqlCriteria);
+                
+                // Convert ArtworkPreviewVM to ArtworksV2
+                var artworksV2 = new List<ArtworksV2>();
+                foreach (var preview in sqlResults.Items)
+                {
+                    var fullArtwork = await _unitOfWork.ArtworkRepository.GetArtworkDetailByIdAsync(preview.Id);
+                    if (fullArtwork != null && fullArtwork.DeletedOn == null && 
+                        fullArtwork.State == StateEnum.Accepted && fullArtwork.Privacy == PrivacyEnum.Public)
+                    {
+                        var artworkV2 = ConvertToArtworksV2(fullArtwork, preview.IsLiked);
+                        artworksV2.Add(artworkV2);
+                    }
+                }
+
+                return new PagedList<ArtworksV2>(
+                    artworksV2,
+                    sqlResults.TotalCount,
+                    criteria.PageNumber,
+                    criteria.PageSize
+                );
+            }
+            else
+            {
+                // If artwork IDs provided, return empty list (similar artwork recommendation requires Elasticsearch)
+                return new PagedList<ArtworksV2>(
+                    new List<ArtworksV2>(),
+                    0,
+                    criteria.PageNumber,
+                    criteria.PageSize
+                );
+            }
         }
 
         var result = await _elasticClient.SearchAsync<ArtworksV2>(searchRequest);
@@ -828,5 +914,41 @@ public class ArtworkService : IArtworkService
             };
             await _notificationService.AddNotificationAsync(notification);
         }
+    }
+
+    /// <summary>
+    /// Convert Artwork entity to ArtworksV2 model for Elasticsearch compatibility
+    /// </summary>
+    private ArtworksV2 ConvertToArtworksV2(Artwork artwork, bool isLiked)
+    {
+        var artworkVM = _mapper.Map<ArtworkVM>(artwork);
+        
+        return new ArtworksV2
+        {
+            Id = artworkVM.Id,
+            Title = artworkVM.Title,
+            Description = artworkVM.Description ?? string.Empty,
+            Thumbnail = artworkVM.Thumbnail,
+            ViewCount = artworkVM.ViewCount,
+            LikeCount = artworkVM.LikeCount,
+            CommentCount = artworkVM.CommentCount,
+            Privacy = artworkVM.Privacy,
+            State = artworkVM.State,
+            IsLiked = isLiked,
+            IsAIGenerated = artworkVM.IsAIGenerated,
+            Score = 0, // Default score for SQL fallback
+            CreatedBy = artworkVM.CreatedBy,
+            CreatedOn = artworkVM.CreatedOn,
+            LastModificatedBy = artworkVM.LastModificatedBy,
+            LastModificatedOn = artworkVM.LastModificatedOn,
+            DeletedBy = artworkVM.DeletedBy,
+            DeletedOn = artworkVM.DeletedOn,
+            Account = artworkVM.Account,
+            LicenseType = artworkVM.LicenseType,
+            CategoryList = artworkVM.CategoryList,
+            TagList = artworkVM.TagList,
+            SoftwareUseds = artworkVM.SoftwareUseds,
+            Assets = artworkVM.Assets
+        };
     }
 }
