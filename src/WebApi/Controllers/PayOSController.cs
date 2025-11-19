@@ -50,9 +50,10 @@ public class PayOSController : ControllerBase
                 });
             }
 
+            // Description will be generated inside the service (max 25 chars for PayOS)
             var paymentUrl = await _payOSService.CreateDepositPaymentLinkAsync(
                 request.Amount,
-                $"Nạp {request.Amount:N0} VNĐ vào ví ArtLink"
+                $"Nạp tiền vào ví"  // This is stored in DB, not sent to PayOS
             );
 
             return Ok(new 

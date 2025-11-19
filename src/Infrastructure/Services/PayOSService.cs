@@ -56,7 +56,7 @@ public class PayOSService : IPayOSService
             Id = Guid.NewGuid(),
             CreatedBy = userId.Value,
             CreatedOn = DateTime.UtcNow,
-            Detail = description,
+            Detail = description, // Full description for DB
             Price = (double)amount,
             Fee = 0,
             TransactionStatus = Domain.Enums.TransactionStatusEnum.InProgress,
@@ -70,7 +70,8 @@ public class PayOSService : IPayOSService
         // PayOS v2: Build URLs and description
         var cancelUrl = $"{_config.CancelUrl}?txId={transaction.Id}";
         var returnUrl = $"{_config.ReturnUrl}?txId={transaction.Id}";
-        var desc = $"Deposit-{orderCode}";  // Keep it short (9 chars limit for non-linked banks)
+        // PayOS description max 25 characters - use simple short description
+        var desc = $"Nap {orderCode}";  // Format: "Nap 1763623787" = 14 chars max
         var amt = (int)amount;
 
         // Generate signature with the EXACT URLs (including query parameters)
@@ -86,7 +87,7 @@ public class PayOSService : IPayOSService
             {
                 new
                 {
-                    name = "Deposit",
+                    name = "Nap tien",
                     quantity = 1,
                     price = amt
                 }
@@ -178,7 +179,7 @@ public class PayOSService : IPayOSService
             CreatedBy = userId.Value, // Buyer
             ToAccountId = sellerId, // Seller
             CreatedOn = DateTime.UtcNow,
-            Detail = $"Mở khóa tài nguyên \"{assetTitle}\"",
+            Detail = $"Mở khóa tài nguyên \"{assetTitle}\"", // Full detail for DB
             Price = -(double)price, // Buyer trả tiền
             Fee = (double)platformFee,
             TransactionStatus = Domain.Enums.TransactionStatusEnum.InProgress,
@@ -192,7 +193,8 @@ public class PayOSService : IPayOSService
         // Build URLs and description
         var cancelUrl = $"{_config.CancelUrl}?txId={transaction.Id}";
         var returnUrl = $"{_config.ReturnUrl}?txId={transaction.Id}&assetId={assetId}";
-        var desc = $"Asset-{orderCode}";  // Keep it short
+        // PayOS description max 25 characters - use simple short description
+        var desc = $"Asset {orderCode}";  // Format: "Asset 1763623787" = 15 chars max
         var amt = (int)price;
 
         // Generate signature with exact URLs
@@ -276,28 +278,42 @@ public class PayOSService : IPayOSService
                 return false;
             }
 
-            // Extract transaction ID from description
-            var description = webhook.data.description;
-            var txIdMatch = System.Text.RegularExpressions.Regex.Match(description, @"TxId: ([a-f0-9\-]+)");
-            
-            if (!txIdMatch.Success)
+            // Find transaction by PayOS orderCode (primary method now)
+            TransactionHistory? transaction = null;
+            if (webhook.data?.orderCode != null)
             {
+                try
+                {
+                    long oc = Convert.ToInt64(webhook.data.orderCode);
+                    transaction = await _dbContext.TransactionHistories
+                        .Include(t => t.Asset)
+                        .FirstOrDefaultAsync(t => t.PaymentOrderCode == oc && t.TransactionStatus == Domain.Enums.TransactionStatusEnum.InProgress);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "[PayOS Webhook] Error parsing orderCode");
+                    return false;
+                }
+            }
+
+            if (transaction == null)
+            {
+                _logger.LogWarning("[PayOS Webhook] Transaction not found for orderCode: {OrderCode}", webhook.data?.orderCode);
                 return false;
             }
 
-            var transactionId = Guid.Parse(txIdMatch.Groups[1].Value);
-            var transaction = await _dbContext.TransactionHistories
-                .Include(t => t.Asset)
-                .FirstOrDefaultAsync(t => t.Id == transactionId);
-
-            if (transaction == null || transaction.TransactionStatus != Domain.Enums.TransactionStatusEnum.InProgress)
+            if (transaction.TransactionStatus != Domain.Enums.TransactionStatusEnum.InProgress)
             {
+                _logger.LogWarning("[PayOS Webhook] Transaction {TxId} is not in progress status", transaction.Id);
                 return false;
             }
 
             // Update transaction status
             transaction.TransactionStatus = Domain.Enums.TransactionStatusEnum.Success;
-            transaction.PaymentTransactionId = webhook.data.orderCode.ToString();
+            if (webhook.data.orderCode != null)
+            {
+                transaction.PaymentTransactionId = webhook.data.orderCode.ToString();
+            }
 
             if (transaction.AssetId.HasValue)
             {
@@ -309,6 +325,8 @@ public class PayOSService : IPayOSService
                 {
                     var sellerRevenue = -transaction.Price - transaction.Fee; // Price is negative for buyer
                     sellerWallet.Balance += sellerRevenue;
+                    
+                    _logger.LogInformation("[PayOS Webhook] Updated seller wallet. Balance: {Balance}", sellerWallet.Balance);
                     
                     // Tạo transaction cho seller
                     var sellerTransaction = new TransactionHistory
@@ -342,14 +360,23 @@ public class PayOSService : IPayOSService
                     // Price trong deposit là DƯƠNG (positive), cộng trực tiếp vào ví
                     buyerWallet.Balance += transaction.Price;
                     transaction.WalletBalance = buyerWallet.Balance;
+                    
+                    _logger.LogInformation("[PayOS Webhook] Updated buyer wallet. AccountId: {AccountId}, Amount Added: {Amount}, New Balance: {NewBalance}", 
+                        transaction.CreatedBy, transaction.Price, buyerWallet.Balance);
+                }
+                else
+                {
+                    _logger.LogError("[PayOS Webhook] Buyer wallet not found for AccountId: {AccountId}", transaction.CreatedBy);
                 }
             }
 
             await _dbContext.SaveChangesAsync();
+            _logger.LogInformation("[PayOS Webhook] Successfully processed transaction {TxId}", transaction.Id);
             return true;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "[PayOS Webhook] Error processing webhook");
             return false;
         }
     }
@@ -362,10 +389,18 @@ public class PayOSService : IPayOSService
                 .Include(t => t.Asset)
                 .FirstOrDefaultAsync(t => t.Id == transactionId);
 
-            if (transaction == null || transaction.TransactionStatus != Domain.Enums.TransactionStatusEnum.InProgress)
+            if (transaction == null)
             {
-                _logger.LogWarning("[PayOS Return] Transaction not found or not in progress: {TxId}", transactionId);
+                _logger.LogWarning("[PayOS Return] Transaction not found: {TxId}", transactionId);
                 return false;
+            }
+
+            if (transaction.TransactionStatus != Domain.Enums.TransactionStatusEnum.InProgress)
+            {
+                _logger.LogWarning("[PayOS Return] Transaction {TxId} status is {Status}, not InProgress", 
+                    transactionId, transaction.TransactionStatus);
+                // If already Success, consider it a success (idempotent)
+                return transaction.TransactionStatus == Domain.Enums.TransactionStatusEnum.Success;
             }
 
             // Lấy thông tin thanh toán từ PayOS API để verify
@@ -410,6 +445,11 @@ public class PayOSService : IPayOSService
                     
                     _dbContext.TransactionHistories.Add(sellerTransaction);
                 }
+                else
+                {
+                    _logger.LogError("[PayOS Return] Seller wallet not found for AccountId: {AccountId}", transaction.ToAccountId);
+                    return false;
+                }
             }
             else
             {
@@ -417,20 +457,36 @@ public class PayOSService : IPayOSService
                 var buyerWallet = await _dbContext.Wallets
                     .FirstOrDefaultAsync(w => w.AccountId == transaction.CreatedBy);
 
-                if (buyerWallet != null)
-                {
-                    // Price trong deposit là DƯƠNG (positive), cộng trực tiếp vào ví
-                    buyerWallet.Balance += transaction.Price;
-                    transaction.WalletBalance = buyerWallet.Balance;
-                    
-                    _logger.LogInformation("[PayOS Return] Updated buyer wallet. AccountId: {AccountId}, Old Balance: {OldBalance}, Amount Added: {Amount}, New Balance: {NewBalance}", 
-                        transaction.CreatedBy, buyerWallet.Balance - transaction.Price, transaction.Price, buyerWallet.Balance);
-                }
-                else
+                if (buyerWallet == null)
                 {
                     _logger.LogError("[PayOS Return] Buyer wallet not found for AccountId: {AccountId}", transaction.CreatedBy);
-                    return false;
+                    
+                    if (!transaction.CreatedBy.HasValue)
+                    {
+                        _logger.LogError("[PayOS Return] Transaction has no CreatedBy value");
+                        return false;
+                    }
+                    
+                    // Try to create wallet if it doesn't exist
+                    buyerWallet = new Wallet
+                    {
+                        Id = Guid.NewGuid(),
+                        AccountId = transaction.CreatedBy.Value,
+                        Balance = 0,
+                        WithdrawMethod = Domain.Enums.WithdrawMethodEnum.Zalopay,
+                        WithdrawInformation = ""
+                    };
+                    _dbContext.Wallets.Add(buyerWallet);
+                    _logger.LogInformation("[PayOS Return] Created new wallet for AccountId: {AccountId}", transaction.CreatedBy.Value);
                 }
+
+                // Price trong deposit là DƯƠNG (positive), cộng trực tiếp vào ví
+                var oldBalance = buyerWallet.Balance;
+                buyerWallet.Balance += transaction.Price;
+                transaction.WalletBalance = buyerWallet.Balance;
+                
+                _logger.LogInformation("[PayOS Return] Updated buyer wallet. AccountId: {AccountId}, Old Balance: {OldBalance}, Amount Added: {Amount}, New Balance: {NewBalance}", 
+                    transaction.CreatedBy, oldBalance, transaction.Price, buyerWallet.Balance);
             }
 
             await _dbContext.SaveChangesAsync();

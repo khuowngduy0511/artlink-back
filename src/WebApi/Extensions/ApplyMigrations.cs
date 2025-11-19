@@ -16,21 +16,9 @@ internal static class ApplyMigrations
             // Try to check if database is accessible
             if (context.Database.CanConnect())
             {
-                var pendingMigrations = context.Database.GetPendingMigrations().ToList();
-                if (pendingMigrations.Any())
+                if (context.Database.GetPendingMigrations().Any())
                 {
-                    Console.WriteLine($"[MIGRATION] Found {pendingMigrations.Count} pending migration(s):");
-                    foreach (var migration in pendingMigrations)
-                    {
-                        Console.WriteLine($"[MIGRATION]   - {migration}");
-                    }
-                    Console.WriteLine("[MIGRATION] Applying migrations...");
                     context.Database.Migrate();
-                    Console.WriteLine("[MIGRATION] Migrations applied successfully.");
-                }
-                else
-                {
-                    Console.WriteLine("[MIGRATION] Database is up to date. No pending migrations.");
                 }
             }
             else
