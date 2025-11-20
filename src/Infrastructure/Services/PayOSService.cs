@@ -405,9 +405,37 @@ public class PayOSService : IPayOSService
 
             // Lấy thông tin thanh toán từ PayOS API để verify
             var orderCode = transaction.PaymentOrderCode ?? 0;
-            var paymentStatus = await GetPaymentStatusAsync(orderCode);
             
-            _logger.LogInformation("[PayOS Return] Payment status for order {OrderCode}: {Status}", orderCode, JsonSerializer.Serialize(paymentStatus));
+            try
+            {
+                var response = await _httpClient.GetAsync($"/v2/payment-requests/{orderCode}");
+                var responseContent = await response.Content.ReadAsStringAsync();
+                
+                _logger.LogInformation("[PayOS Return] Payment status response: {Response}", responseContent);
+                
+                var paymentInfo = JsonSerializer.Deserialize<PayOSPaymentResponse>(responseContent, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                
+                // Kiểm tra xem thanh toán có thành công không
+                if (paymentInfo?.code != "00" || paymentInfo?.data?.status != "PAID")
+                {
+                    _logger.LogError("[PayOS Return] Payment not successful. Code: {Code}, Status: {Status}", 
+                        paymentInfo?.code, paymentInfo?.data?.status);
+                    
+                    // Update transaction to failed
+                    transaction.TransactionStatus = Domain.Enums.TransactionStatusEnum.Failed;
+                    await _dbContext.SaveChangesAsync();
+                    
+                    return false;
+                }
+                
+                _logger.LogInformation("[PayOS Return] Payment verified as PAID for order {OrderCode}", orderCode);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "[PayOS Return] Error verifying payment status for order {OrderCode}", orderCode);
+                // Don't update status if we can't verify
+                return false;
+            }
 
             // Cập nhật transaction status
             transaction.TransactionStatus = Domain.Enums.TransactionStatusEnum.Success;
