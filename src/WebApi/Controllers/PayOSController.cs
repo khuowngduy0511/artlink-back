@@ -174,6 +174,8 @@ public class PayOSController : ControllerBase
 
     /// <summary>
     /// Xử lý callback khi thanh toán thành công - được gọi từ returnUrl
+    /// CHÚ Ý: Return URL chỉ kiểm tra status từ PayOS, KHÔNG tự động cộng tiền
+    /// Webhook sẽ là luồng duy nhất cập nhật ví để tránh race condition
     /// </summary>
     [HttpGet("return")]
     public async Task<IActionResult> PaymentReturn([FromQuery] string txId, [FromQuery] string? status)
@@ -193,21 +195,56 @@ public class PayOSController : ControllerBase
                 return BadRequest("Invalid transaction ID");
             }
 
-            // Xử lý cập nhật ví
-            var success = await _payOSService.ProcessReturnUrlAsync(transactionId);
+            // Kiểm tra payment status từ PayOS (không cập nhật ví)
+            var paymentVerified = await _payOSService.ProcessReturnUrlAsync(transactionId);
 
-            if (success)
+            if (paymentVerified)
             {
-                // Redirect về frontend với thông báo thành công
+                // PayOS đã confirm payment là PAID
+                // Redirect về frontend, frontend sẽ polling để check transaction status
+                // vì webhook có thể chưa chạy xong
                 return Redirect($"https://artlink-front.vercel.app/payment/success?txId={txId}");
             }
 
+            // Payment chưa được confirm hoặc có lỗi
             return Redirect($"https://artlink-front.vercel.app/payment/cancel?txId={txId}");
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing payment return");
             return Redirect($"https://artlink-front.vercel.app/payment/cancel?error={ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Kiểm tra trạng thái transaction để frontend polling sau khi thanh toán
+    /// </summary>
+    [HttpGet("transaction/{transactionId}/status")]
+    public async Task<IActionResult> GetTransactionStatus(Guid transactionId)
+    {
+        try
+        {
+            var transaction = await _payOSService.GetTransactionByIdAsync(transactionId);
+            
+            if (transaction == null)
+            {
+                return NotFound(new { message = "Transaction not found" });
+            }
+
+            return Ok(new 
+            { 
+                transactionId = transaction.Id,
+                status = transaction.TransactionStatus.ToString(),
+                price = transaction.Price,
+                walletBalance = transaction.WalletBalance,
+                detail = transaction.Detail,
+                createdOn = transaction.CreatedOn
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting transaction status for {TransactionId}", transactionId);
+            return StatusCode(500, new { message = "Error retrieving transaction status" });
         }
     }
 

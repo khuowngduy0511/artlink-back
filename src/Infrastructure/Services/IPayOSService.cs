@@ -1,3 +1,5 @@
+using Domain.Entitites;
+
 namespace Infrastructure.Services;
 
 public interface IPayOSService
@@ -36,4 +38,9 @@ public interface IPayOSService
     /// Lấy trạng thái thanh toán
     /// </summary>
     Task<object> GetPaymentStatusAsync(long orderCode);
+
+    /// <summary>
+    /// Lấy transaction theo ID để kiểm tra trạng thái
+    /// </summary>
+    Task<TransactionHistory?> GetTransactionByIdAsync(Guid transactionId);
 }
