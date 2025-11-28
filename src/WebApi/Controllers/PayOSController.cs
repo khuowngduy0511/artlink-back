@@ -174,7 +174,7 @@ public class PayOSController : ControllerBase
 
             if (success)
             {
-                _logger.LogInformation("Payment processed successfully");
+                _logger.LogInformation("[PayOS Webhook] Payment processed successfully");
                 
                 return Ok(new 
                 { 
@@ -183,12 +183,14 @@ public class PayOSController : ControllerBase
                 });
             }
 
-            _logger.LogError("Failed to process payment");
+            // Trả về 200 OK ngay cả khi không xử lý được
+            // Để tránh PayOS retry liên tục với transaction không tồn tại hoặc đã xử lý
+            _logger.LogWarning("[PayOS Webhook] Payment processing returned false - but returning OK to prevent retry");
             
-            return BadRequest(new 
+            return Ok(new 
             { 
-                error = -1,
-                message = "Payment processing failed" 
+                error = 0,
+                message = "Webhook received but not processed (transaction may not exist or already processed)" 
             });
         }
         catch (Exception ex)
