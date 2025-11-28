@@ -51,11 +51,14 @@ public class PayOSService : IPayOSService
         var orderCode = GenerateOrderCode();
         
         // Tạo transaction history với status pending
+        var vietnamTimeZone = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
+        var vietnamTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, vietnamTimeZone);
+        
         var transaction = new TransactionHistory
         {
             Id = Guid.NewGuid(),
             CreatedBy = userId.Value,
-            CreatedOn = DateTime.UtcNow,
+            CreatedOn = vietnamTime,
             Detail = description, // Full description for DB
             Price = (double)amount,
             Fee = 0,
@@ -172,13 +175,16 @@ public class PayOSService : IPayOSService
         var sellerRevenue = price - platformFee;
 
         // Tạo transaction history
+        var vietnamTimeZone = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
+        var vietnamTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, vietnamTimeZone);
+        
         var transaction = new TransactionHistory
         {
             Id = Guid.NewGuid(),
             AssetId = assetId,
             CreatedBy = userId.Value, // Buyer
             ToAccountId = sellerId, // Seller
-            CreatedOn = DateTime.UtcNow,
+            CreatedOn = vietnamTime,
             Detail = $"Mở khóa tài nguyên \"{assetTitle}\"", // Full detail for DB
             Price = -(double)price, // Buyer trả tiền
             Fee = (double)platformFee,

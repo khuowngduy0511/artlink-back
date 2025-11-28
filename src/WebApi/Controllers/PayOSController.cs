@@ -116,17 +116,42 @@ public class PayOSController : ControllerBase
 
     /// <summary>
     /// Webhook callback từ PayOS - xử lý thanh toán thành công/thất bại
+    /// Hỗ trợ cả GET (cho PayOS test) và POST (cho webhook thật)
     /// </summary>
+    [HttpGet("webhook")]
     [HttpPost("webhook")]
     public async Task<IActionResult> PayOSWebhook()
     {
         try
         {
-            // Đọc body
+            // Nếu là GET request (PayOS test webhook), trả về OK ngay
+            if (Request.Method == "GET")
+            {
+                _logger.LogInformation("[PayOS Webhook] GET request - webhook verification test");
+                return Ok(new 
+                { 
+                    error = 0,
+                    message = "Webhook URL is active and ready to receive events",
+                    timestamp = DateTime.UtcNow
+                });
+            }
+
+            // Đọc body (chỉ cho POST request)
             using var reader = new StreamReader(Request.Body);
             var body = await reader.ReadToEndAsync();
             
-            _logger.LogInformation("PayOS Webhook received: {Body}", body);
+            _logger.LogInformation("[PayOS Webhook] Received POST webhook: {Body}", body);
+
+            // Check if body is empty
+            if (string.IsNullOrWhiteSpace(body))
+            {
+                _logger.LogWarning("[PayOS Webhook] Empty webhook body");
+                // Trả về 200 OK thay vì 400 để PayOS không retry liên tục
+                return Ok(new { 
+                    error = 0,
+                    message = "Received empty body - ignored" 
+                });
+            }
 
             // Deserialize webhook data
             var webhookData = JsonSerializer.Deserialize<object>(body, new JsonSerializerOptions
@@ -136,7 +161,12 @@ public class PayOSController : ControllerBase
 
             if (webhookData == null)
             {
-                return BadRequest(new { message = "Invalid webhook data" });
+                _logger.LogWarning("[PayOS Webhook] Failed to deserialize webhook data");
+                // Trả về 200 OK để PayOS không retry liên tục
+                return Ok(new { 
+                    error = 0,
+                    message = "Invalid webhook data format - ignored" 
+                });
             }
 
             // Xử lý callback (verification được thực hiện bên trong)
