@@ -306,10 +306,7 @@ public class PaymentsController : ControllerBase
                         wallet.Balance -= request.Amount;
                         _unitOfWork.WalletRepository.Update(wallet);
 
-                        // Tạo wallet history với Vietnam time
-                        var vietnamTimeZone = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time");
-                        var vietnamTime = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, vietnamTimeZone);
-                        
+                        // Tạo wallet history
                         var walletHistory = new WalletHistory
                         {
                             Amount = -request.Amount,
@@ -318,7 +315,7 @@ public class PaymentsController : ControllerBase
                             TransactionStatus = TransactionStatusEnum.Success,
                             PaymentMethod = PaymentMethodEnum.BankTransfer,
                             CreatedBy = wallet.AccountId,
-                            CreatedOn = vietnamTime
+                            CreatedOn = DateTime.UtcNow
                         };
                         await _unitOfWork.WalletHistoryRepository.AddAsync(walletHistory);
                     }
