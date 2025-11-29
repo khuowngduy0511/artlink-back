@@ -2,16 +2,19 @@
 using Application.Services.Abstractions;
 using System.Net.Mail;
 using System.Net;
+using Microsoft.Extensions.Logging;
 
 namespace Application.Services;
 
 public class EmailService : IEmailService
 {
     private readonly AppConfiguration _appConfig;
+    private readonly ILogger<EmailService> _logger;
 
-    public EmailService(AppConfiguration appConfiguration)
+    public EmailService(AppConfiguration appConfiguration, ILogger<EmailService> logger)
     {
         _appConfig = appConfiguration;
+        _logger = logger;
     }
 
     public async Task CreateSampleMailAsync()
@@ -60,7 +63,11 @@ public class EmailService : IEmailService
 
     public async Task<bool> SendVerificationEmailAsync(string email, string verificationCode)
     {
-        var message = @"Xác nhận địa chỉ email của bạn
+        try
+        {
+            _logger.LogInformation("[EMAIL] Attempting to send verification email to {Email}", email);
+            
+            var message = @"Xác nhận địa chỉ email của bạn
 
 Hãy chắc chắn đây là địa chỉ email đúng của bạn. Vui lòng nhập mã xác nhận này để tiếp tục đăng kí tài khoản trên hệ thống Artlink:
 
@@ -70,7 +77,25 @@ Hãy chắc chắn đây là địa chỉ email đúng của bạn. Vui lòng nh
 
 Cảm ơn,
 Artlink.";
-        return await SendMailAsync(new List<string> { email }, "[Artlink] Xác thực email", message);
+            
+            var result = await SendMailAsync(new List<string> { email }, "[Artlink] Xác thực email", message);
+            
+            if (result)
+            {
+                _logger.LogInformation("[EMAIL] Successfully sent verification email to {Email}", email);
+            }
+            else
+            {
+                _logger.LogWarning("[EMAIL] Failed to send verification email to {Email} - SendMailAsync returned false", email);
+            }
+            
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[EMAIL] Exception while sending verification email to {Email}: {Message}", email, ex.Message);
+            return false;
+        }
     }
     
     public Task SendVerificationEmailAsyncFireAndForget(string email, string verificationCode)
@@ -80,16 +105,22 @@ Artlink.";
         {
             try
             {
-                await SendVerificationEmailAsync(email, verificationCode);
+                _logger.LogInformation("[EMAIL] Starting background task to send verification email to {Email}", email);
+                var success = await SendVerificationEmailAsync(email, verificationCode);
+                if (!success)
+                {
+                    _logger.LogError("[EMAIL] Background task failed to send verification email to {Email}", email);
+                }
             }
             catch (Exception ex)
             {
                 // Log error but don't throw (fire-and-forget pattern)
-                Console.WriteLine($"[EMAIL ERROR] Failed to send verification email to {email}: {ex.Message}");
+                _logger.LogError(ex, "[EMAIL ERROR] Background task exception while sending verification email to {Email}: {Message}", email, ex.Message);
             }
         });
         
         // Return completed task immediately - email is being sent in background
+        _logger.LogInformation("[EMAIL] Fire-and-forget task initiated for {Email}", email);
         return Task.CompletedTask;
     }
     public async Task<bool> SendMailAsync(List<string> emails, string subject, string message)
@@ -99,6 +130,18 @@ Artlink.";
             var email = _appConfig.EmailSetting.Email;
             var password = _appConfig.EmailSetting.Password;
             var dispayName = _appConfig.EmailSetting.DisplayName;
+            
+            _logger.LogInformation("[EMAIL] Preparing to send email. From: {From}, To: {Recipients}, Subject: {Subject}",
+                email, string.Join(", ", emails), subject);
+            
+            // Validate email configuration
+            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+            {
+                _logger.LogError("[EMAIL] Email configuration is incomplete. Email: {Email}, Password: {HasPassword}",
+                    email, !string.IsNullOrWhiteSpace(password));
+                return false;
+            }
+            
             MailMessage myMessage = new();
             foreach (var mail in emails)
             {
@@ -108,6 +151,8 @@ Artlink.";
             myMessage.From = new MailAddress(email, dispayName);
             myMessage.Subject = subject;
             myMessage.Body = message;
+            
+            _logger.LogInformation("[EMAIL] Connecting to SMTP server: smtp.gmail.com:587 (SSL enabled)");
             
             using (SmtpClient smtp = new SmtpClient())
             {
@@ -119,14 +164,25 @@ Artlink.";
                 smtp.DeliveryMethod = SmtpDeliveryMethod.Network;
                 // Add timeout to prevent long waits (10 seconds)
                 smtp.Timeout = 10000;
+                
+                _logger.LogInformation("[EMAIL] Sending email via SMTP...");
                 // Send email asynchronously with timeout protection
                 await smtp.SendMailAsync(myMessage);
+                _logger.LogInformation("[EMAIL] Email sent successfully to {Recipients}", string.Join(", ", emails));
             }
             return true;
         }
+        catch (SmtpException smtpEx)
+        {
+            _logger.LogError(smtpEx, "[EMAIL] SMTP Error: {StatusCode} - {Message}. InnerException: {InnerMessage}",
+                smtpEx.StatusCode, smtpEx.Message, smtpEx.InnerException?.Message ?? "None");
+            return false;
+        }
         catch (Exception ex)
         {
-            throw new Exception(ex.Message);
+            _logger.LogError(ex, "[EMAIL] Unexpected error while sending email: {Message}. InnerException: {InnerMessage}",
+                ex.Message, ex.InnerException?.Message ?? "None");
+            return false;
         }
     }
 }
