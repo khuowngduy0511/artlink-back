@@ -152,13 +152,13 @@ Artlink.";
             myMessage.Subject = subject;
             myMessage.Body = message;
             
-            _logger.LogInformation("[EMAIL] Connecting to SMTP server: smtp.gmail.com:587 (SSL enabled)");
+            _logger.LogInformation("[EMAIL] Connecting to SMTP server: smtp.gmail.com:465 (SSL enabled)");
             
             using (SmtpClient smtp = new SmtpClient())
             {
                 smtp.EnableSsl = true;
                 smtp.Host = "smtp.gmail.com";
-                smtp.Port = 587;
+                smtp.Port = 465; // Changed from 587 to 465 (SSL instead of TLS) - Render blocks port 587
                 smtp.UseDefaultCredentials = false;
                 smtp.Credentials = new NetworkCredential(email, password);
                 smtp.DeliveryMethod = SmtpDeliveryMethod.Network;

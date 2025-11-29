@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Email Verification - ArtLink</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .response {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            display: none;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+        }
+        .logs {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .log-entry {
+            font-family: monospace;
+            font-size: 12px;
+            margin: 5px 0;
+            padding: 5px;
+            background: white;
+            border-left: 3px solid #4CAF50;
+        }
+        .countdown {
+            text-align: center;
+            color: #666;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Test Email Verification</h1>
+        
+        <div class="info">
+            <strong>Hướng dẫn:</strong>
+            <ol>
+                <li>Nhập email của bạn (Gmail)</li>
+                <li>Nhấn "Gửi mã xác thực"</li>
+                <li>Kiểm tra email (cả Inbox và Spam)</li>
+                <li>Nhập mã 6 chữ số vào ô bên dưới</li>
+                <li>Nhấn "Xác thực" để hoàn tất</li>
+            </ol>
+        </div>
+
+        <div class="form-group">
+            <label for="email">Email của bạn:</label>
+            <input type="email" id="email" placeholder="example@gmail.com" required>
+        </div>
+
+        <button id="sendBtn" onclick="sendVerificationCode()">📧 Gửi mã xác thực</button>
+        <div id="countdown" class="countdown"></div>
+
+        <div id="response" class="response"></div>
+
+        <div class="form-group" id="verifySection" style="display: none; margin-top: 20px;">
+            <label for="code">Mã xác thực (6 chữ số):</label>
+            <input type="text" id="code" placeholder="123456" maxlength="6" pattern="\d{6}">
+            <button onclick="verifyCode()" style="margin-top: 10px; background: #2196F3;">✅ Xác thực</button>
+        </div>
+
+        <div id="logs" class="logs" style="display: none;">
+            <strong>📝 Logs:</strong>
+            <div id="logEntries"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'https://artlink-back.onrender.com/api/auth';
+        let cooldownTimer = null;
+        let cooldownSeconds = 0;
+
+        function addLog(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const logEntries = document.getElementById('logEntries');
+            logsDiv.style.display = 'block';
+            
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.style.borderLeftColor = type === 'error' ? '#f44336' : type === 'success' ? '#4CAF50' : '#2196F3';
+            
+            const timestamp = new Date().toLocaleTimeString('vi-VN');
+            entry.textContent = `[${timestamp}] ${message}`;
+            
+            logEntries.appendChild(entry);
+            logEntries.scrollTop = logEntries.scrollHeight;
+        }
+
+        function showResponse(message, isSuccess) {
+            const responseDiv = document.getElementById('response');
+            responseDiv.textContent = message;
+            responseDiv.className = 'response ' + (isSuccess ? 'success' : 'error');
+            responseDiv.style.display = 'block';
+            
+            addLog(message, isSuccess ? 'success' : 'error');
+        }
+
+        function startCooldown(seconds) {
+            cooldownSeconds = seconds;
+            const sendBtn = document.getElementById('sendBtn');
+            const countdownDiv = document.getElementById('countdown');
+            
+            sendBtn.disabled = true;
+            
+            cooldownTimer = setInterval(() => {
+                cooldownSeconds--;
+                countdownDiv.textContent = `Có thể gửi lại sau ${cooldownSeconds} giây...`;
+                
+                if (cooldownSeconds <= 0) {
+                    clearInterval(cooldownTimer);
+                    sendBtn.disabled = false;
+                    countdownDiv.textContent = '';
+                }
+            }, 1000);
+        }
+
+        async function sendVerificationCode() {
+            const email = document.getElementById('email').value.trim();
+            
+            if (!email) {
+                showResponse('❌ Vui lòng nhập email', false);
+                return;
+            }
+
+            if (!email.includes('@')) {
+                showResponse('❌ Email không hợp lệ', false);
+                return;
+            }
+
+            addLog(`Đang gửi mã xác thực đến ${email}...`);
+            
+            try {
+                const response = await fetch(`${API_URL}/send-email-verification`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResponse('✅ ' + (data.message || 'Đã gửi mã xác thực thành công!'), true);
+                    document.getElementById('verifySection').style.display = 'block';
+                    addLog('Kiểm tra email của bạn (cả thư mục Spam nếu không thấy trong Inbox)');
+                    addLog('Email gửi từ: artlink58@gmail.com', 'success');
+                    addLog('Subject: [Artlink] Xác thực email', 'success');
+                    startCooldown(60); // 1 minute cooldown
+                } else {
+                    const errorMsg = data.errorMessage || data.message || 'Không thể gửi email';
+                    showResponse('❌ ' + errorMsg, false);
+                    
+                    if (errorMsg.includes('đợi')) {
+                        startCooldown(60);
+                    }
+                }
+            } catch (error) {
+                showResponse('❌ Lỗi kết nối: ' + error.message, false);
+                addLog('Error: ' + error.message, 'error');
+            }
+        }
+
+        async function verifyCode() {
+            const email = document.getElementById('email').value.trim();
+            const code = document.getElementById('code').value.trim();
+            
+            if (!code || code.length !== 6) {
+                showResponse('❌ Vui lòng nhập mã xác thực 6 chữ số', false);
+                return;
+            }
+
+            addLog(`Đang xác thực mã ${code}...`);
+            
+            try {
+                const response = await fetch(`${API_URL}/verify-email`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email,
+                        verificationCode: code
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResponse('✅ ' + (data.message || 'Xác thực thành công!'), true);
+                    addLog('Email đã được xác thực thành công!', 'success');
+                } else {
+                    const errorMsg = data.errorMessage || data.message || 'Mã xác thực không hợp lệ';
+                    showResponse('❌ ' + errorMsg, false);
+                }
+            } catch (error) {
+                showResponse('❌ Lỗi kết nối: ' + error.message, false);
+                addLog('Error: ' + error.message, 'error');
+            }
+        }
+
+        // Allow Enter key to submit
+        document.getElementById('email').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendVerificationCode();
+        });
+        
+        document.getElementById('code').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') verifyCode();
+        });
+
+        addLog('Test page loaded. Ready to send verification email.');
+        addLog('API Endpoint: ' + API_URL);
+    </script>
+</body>
+</html>
