@@ -3,6 +3,8 @@ using Application.Services.Abstractions;
 using System.Net.Mail;
 using System.Net;
 using Microsoft.Extensions.Logging;
+using SendGrid;
+using SendGrid.Helpers.Mail;
 
 namespace Application.Services;
 
@@ -127,60 +129,57 @@ Artlink.";
     {
         try
         {
-            var email = _appConfig.EmailSetting.Email;
-            var password = _appConfig.EmailSetting.Password;
-            var dispayName = _appConfig.EmailSetting.DisplayName;
+            var fromEmail = _appConfig.EmailSetting.Email;
+            var apiKey = _appConfig.EmailSetting.SendGridApiKey;
+            var displayName = _appConfig.EmailSetting.DisplayName;
             
-            _logger.LogInformation("[EMAIL] Preparing to send email. From: {From}, To: {Recipients}, Subject: {Subject}",
-                email, string.Join(", ", emails), subject);
+            _logger.LogInformation("[EMAIL] Preparing to send email via SendGrid API. From: {From}, To: {Recipients}, Subject: {Subject}",
+                fromEmail, string.Join(", ", emails), subject);
             
             // Validate email configuration
-            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+            if (string.IsNullOrWhiteSpace(fromEmail) || string.IsNullOrWhiteSpace(apiKey))
             {
-                _logger.LogError("[EMAIL] Email configuration is incomplete. Email: {Email}, Password: {HasPassword}",
-                    email, !string.IsNullOrWhiteSpace(password));
+                _logger.LogError("[EMAIL] Email configuration is incomplete. Email: {Email}, ApiKey: {HasApiKey}",
+                    fromEmail, !string.IsNullOrWhiteSpace(apiKey));
                 return false;
             }
             
-            MailMessage myMessage = new();
-            foreach (var mail in emails)
-            {
-                myMessage.To.Add(mail);
-            }
-            myMessage.IsBodyHtml = true;
-            myMessage.From = new MailAddress(email, dispayName);
-            myMessage.Subject = subject;
-            myMessage.Body = message;
+            var client = new SendGridClient(apiKey);
+            var from = new EmailAddress(fromEmail, displayName);
+            var tos = emails.Select(e => new EmailAddress(e)).ToList();
             
-            _logger.LogInformation("[EMAIL] Connecting to SMTP server: smtp.gmail.com:465 (SSL enabled)");
+            // SendGrid supports both HTML and plain text
+            var isHtml = message.Contains("<") && message.Contains(">");
             
-            using (SmtpClient smtp = new SmtpClient())
+            _logger.LogInformation("[EMAIL] Sending email via SendGrid API (HTML: {IsHtml})...", isHtml);
+            
+            var msg = MailHelper.CreateSingleEmailToMultipleRecipients(
+                from,
+                tos,
+                subject,
+                isHtml ? null : message,  // Plain text content
+                isHtml ? message : null   // HTML content
+            );
+            
+            var response = await client.SendEmailAsync(msg);
+            
+            if (response.IsSuccessStatusCode)
             {
-                smtp.EnableSsl = true;
-                smtp.Host = "smtp.gmail.com";
-                smtp.Port = 465; // Changed from 587 to 465 (SSL instead of TLS) - Render blocks port 587
-                smtp.UseDefaultCredentials = false;
-                smtp.Credentials = new NetworkCredential(email, password);
-                smtp.DeliveryMethod = SmtpDeliveryMethod.Network;
-                // Add timeout to prevent long waits (10 seconds)
-                smtp.Timeout = 10000;
-                
-                _logger.LogInformation("[EMAIL] Sending email via SMTP...");
-                // Send email asynchronously with timeout protection
-                await smtp.SendMailAsync(myMessage);
-                _logger.LogInformation("[EMAIL] Email sent successfully to {Recipients}", string.Join(", ", emails));
+                _logger.LogInformation("[EMAIL] Email sent successfully via SendGrid to {Recipients}. StatusCode: {StatusCode}",
+                    string.Join(", ", emails), response.StatusCode);
+                return true;
             }
-            return true;
-        }
-        catch (SmtpException smtpEx)
-        {
-            _logger.LogError(smtpEx, "[EMAIL] SMTP Error: {StatusCode} - {Message}. InnerException: {InnerMessage}",
-                smtpEx.StatusCode, smtpEx.Message, smtpEx.InnerException?.Message ?? "None");
-            return false;
+            else
+            {
+                var responseBody = await response.Body.ReadAsStringAsync();
+                _logger.LogError("[EMAIL] SendGrid API Error: {StatusCode} - {ResponseBody}",
+                    response.StatusCode, responseBody);
+                return false;
+            }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "[EMAIL] Unexpected error while sending email: {Message}. InnerException: {InnerMessage}",
+            _logger.LogError(ex, "[EMAIL] Unexpected error while sending email via SendGrid: {Message}. InnerException: {InnerMessage}",
                 ex.Message, ex.InnerException?.Message ?? "None");
             return false;
         }
